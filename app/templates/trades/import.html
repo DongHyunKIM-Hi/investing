@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>체결내역 CSV 가져오기</h2>
+<p>증권사 앱·HTS에서 <strong>해외주식 체결내역</strong>을 CSV로 내보내 올려주세요. 같은 파일을 다시 올려도 중복 저장되지 않습니다.</p>
+{% if error %}<p class="down">{{ error }}</p>{% endif %}
+<form method="post" action="/trades/import/preview" enctype="multipart/form-data">
+  <input type="file" name="file" accept=".csv,text/csv" required>
+  <button type="submit">미리보기</button>
+</form>
+{% endblock %}

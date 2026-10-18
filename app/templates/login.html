@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<article style="max-width:24rem;margin:4rem auto">
+  <h3>로그인</h3>
+  <form method="post" action="/login">
+    <input type="password" name="password" placeholder="비밀번호" required autofocus
+           {% if error %}aria-invalid="true"{% endif %}>
+    {% if error %}<small>{{ error }}</small>{% endif %}
+    <button type="submit">들어가기</button>
+  </form>
+</article>
+{% endblock %}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}껄무새 탈출{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul><li><strong>껄무새 탈출</strong></li></ul>
+      {% if request.session.get("auth") %}
+      <ul>
+        <li><a href="/trades">매매 기록</a></li>
+        <li><a href="/trades/import">CSV 가져오기</a></li>
+        <li><a href="/trades/tagging">이유 태깅</a></li>
+        <li><form method="post" action="/logout" style="margin:0"><button class="outline secondary" style="padding:.3rem .8rem">로그아웃</button></form></li>
+      </ul>
+      {% endif %}
+    </nav>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="container disclaimer">
+    개인 매매 기록을 바탕으로 한 참고 도구이며 투자 자문이 아닙니다.
+  </footer>
+</body>
+</html>

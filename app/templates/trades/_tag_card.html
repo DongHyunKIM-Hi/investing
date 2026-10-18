@@ -1,0 +1,35 @@
+{% set c = d.context or {} %}
+{% set o = d.outcome or {} %}
+{% set reasons = BUY_REASONS if d.side == "buy" else SELL_REASONS %}
+<article id="decision-{{ d.id }}">
+  <header>
+    <strong>{{ d.decided_on }} · {{ d.ticker }} · {{ "매수" if d.side == "buy" else "매도" }}</strong>
+    {% set r = o.realized_return if o.realized_return is not none else o.mark_return %}
+    {% if r is not none %} → <span class="{{ r|tone }}">{{ r|pct }}</span>{% endif %}
+  </header>
+  {% if c %}
+  <p class="ctx muted">
+    <span>직전 5일 <b class="{{ c.ret_5d|tone }}">{{ c.ret_5d|pct }}</b></span>
+    <span>직전 20일 <b class="{{ c.ret_20d|tone }}">{{ c.ret_20d|pct }}</b></span>
+    <span>52주 고점 대비 <b>{{ c.from_52w_high|pct }}</b></span>
+    <span>RSI {{ c.rsi14 if c.rsi14 is not none else "–" }}</span>
+    <span>시장(SPY) 20일 <b class="{{ c.spy_ret_20d|tone }}">{{ c.spy_ret_20d|pct }}</b></span>
+  </p>
+  {% endif %}
+  <form hx-post="/trades/{{ d.id }}/tags" hx-target="#decision-{{ d.id }}" hx-swap="outerHTML">
+    <fieldset class="chips">
+      <legend>이유 (여러 개 가능)</legend>
+      {% for key, label in reasons.items() %}
+      <label><input type="checkbox" name="reasons" value="{{ key }}">{{ label }}</label>
+      {% endfor %}
+    </fieldset>
+    <fieldset class="chips">
+      <legend>그때 기분</legend>
+      {% for key, label in EMOTIONS.items() %}
+      <label><input type="radio" name="emotion" value="{{ key }}" {% if key == "unknown" %}checked{% endif %}>{{ label }}</label>
+      {% endfor %}
+    </fieldset>
+    <input name="reason_text" placeholder="한 줄 메모 (선택)">
+    <button type="submit">저장</button>
+  </form>
+</article>

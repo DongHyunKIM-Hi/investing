@@ -1,0 +1,6 @@
+{% set reasons = BUY_REASONS if d.side == "buy" else SELL_REASONS %}
+<article id="decision-{{ d.id }}">
+  <ins>저장됨</ins> · {{ d.decided_on }} · {{ d.ticker }} ·
+  {% for t in d.reason_tags %}<span class="tag">{{ reasons.get(t, t) }}</span>{% endfor %}
+  <span class="muted">{{ EMOTIONS.get(d.emotion, "") }}</span>
+</article>

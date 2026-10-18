@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>가져오기 완료</h2>
+<ul>
+  <li>새 체결 <strong>{{ summary.new_fills }}</strong>건 (이미 있던 체결 {{ summary.duplicates }}건 건너뜀)</li>
+  <li>새 결정 <strong>{{ summary.new_decisions }}</strong>건{% if summary.linked_decisions %}, 상담 기록에 연결 {{ summary.linked_decisions }}건{% endif %}</li>
+  <li>종목: {{ summary.tickers|sort|join(", ") or "–" }}</li>
+</ul>
+{% if warnings %}
+<details open><summary>확인이 필요한 항목 {{ warnings|length }}건</summary>
+  <ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</details>
+{% endif %}
+{% if skipped %}
+<details><summary>건너뛴 행 {{ skipped|length }}건 (입금·배당 등)</summary>
+  <ul>{% for line, reason in skipped %}<li>{{ line }}행: {{ reason }}</li>{% endfor %}</ul>
+</details>
+{% endif %}
+<div style="display:flex;gap:1rem">
+  <a href="/trades/tagging" role="button">그때 왜 샀는지 기록하기</a>
+  <a href="/trades" role="button" class="outline">매매 기록 보기</a>
+</div>
+{% endblock %}

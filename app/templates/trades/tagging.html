@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<hgroup>
+  <h2>그때 왜 샀을까?</h2>
+  <p>당시 상황을 힌트로 보여드릴게요. 기억나는 만큼만 고르면 되고, 모르면 그냥 저장하세요.</p>
+</hgroup>
+{% for d in decisions %}{% include "trades/_tag_card.html" %}{% else %}
+<p class="muted">태깅할 결정이 없습니다. 🎉</p>
+{% endfor %}
+{% endblock %}

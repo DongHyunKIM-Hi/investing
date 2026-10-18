@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<hgroup>
+  <h2>매매 기록</h2>
+  <p>결정 {{ decisions|length }}건{% if untagged %} · <a href="/trades/tagging">이유가 비어 있는 결정 {{ untagged }}건</a>{% endif %}</p>
+</hgroup>
+<div style="display:flex;gap:1rem;align-items:center">
+  <a href="/trades/import" role="button">CSV 가져오기</a>
+  <button class="outline" hx-post="/trades/recompute" hx-target="#recompute" hx-indicator="#recompute-busy">시세·결과 재계산</button>
+  <span id="recompute-busy" class="htmx-indicator muted">계산 중…</span>
+</div>
+<div id="recompute"></div>
+{% if decisions %}
+<div class="overflow-auto">
+<table class="striped">
+  <thead><tr>
+    <th>날짜</th><th>종목</th><th>구분</th><th>이유</th><th>상태</th>
+    <th>수익률</th><th>SPY 대비</th><th>보유일</th><th>최대낙폭</th><th>매도 후 20일</th>
+  </tr></thead>
+  <tbody>
+  {% for d in decisions %}
+    {% set o = d.outcome or {} %}
+    {% set r = o.realized_return if o.status in ("closed", None) or d.side == "sell" else o.mark_return %}
+    <tr>
+      <td>{{ d.decided_on }}</td>
+      <td><strong>{{ d.ticker }}</strong></td>
+      <td>{{ "매수" if d.side == "buy" else "매도" }}</td>
+      <td>
+        {% set labels = BUY_REASONS if d.side == "buy" else SELL_REASONS %}
+        {% for t in d.reason_tags %}<span class="tag">{{ labels.get(t, t) }}</span>{% else %}<span class="muted">–</span>{% endfor %}
+      </td>
+      <td>{% if d.side == "buy" %}{{ {"open": "보유", "partial": "일부 매도", "closed": "청산"}.get(o.status, "–") }}{% endif %}</td>
+      <td class="{{ r|tone }}">{{ r|pct }}{% if d.side == "buy" and o.status != "closed" and r is not none %} <small class="muted">(평가)</small>{% endif %}</td>
+      <td class="{{ o.excess_return|tone }}">{{ o.excess_return|pct }}</td>
+      <td>{{ o.holding_days if o.holding_days is not none else "–" }}</td>
+      <td class="{{ o.max_drawdown|tone }}">{{ o.max_drawdown|pct }}</td>
+      <td class="{{ o.post_exit_20d|tone }}">{{ o.post_exit_20d|pct }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">아직 기록이 없습니다. 증권사 체결내역 CSV를 가져와 시작하세요.</p>
+{% endif %}
+{% endblock %}

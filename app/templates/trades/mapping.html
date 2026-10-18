@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% macro pick(name, label, selected) %}
+<label>{{ label }}
+  <select name="{{ name }}" required>
+    <option value="" {% if not selected %}selected{% endif %} disabled>선택</option>
+    {% for c in columns %}<option value="{{ c }}" {% if c == selected %}selected{% endif %}>{{ c }}</option>{% endfor %}
+  </select>
+</label>
+{% endmacro %}
+{% block content %}
+<h2>컬럼 맞추기</h2>
+<p>{{ filename }} · {{ total }}행. {% if mapping %}헤더를 보고 자동으로 맞춰 두었습니다. 확인해 주세요.{% else %}각 항목에 해당하는 컬럼을 골라주세요.{% endif %}</p>
+{% if error %}<p class="down">{{ error }}</p>{% endif %}
+<div class="overflow-auto">
+<table>
+  <thead><tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for row in rows %}<tr>{% for c in columns %}<td>{{ row[c] }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+</table>
+</div>
+<form method="post" action="/trades/import/commit">
+  <input type="hidden" name="token" value="{{ token }}">
+  <div class="grid">
+    {{ pick("date_col", "체결일", mapping.date if mapping) }}
+    <label>날짜 형식 (비우면 자동)
+      <input name="date_format" placeholder="예: %Y.%m.%d" value="{{ mapping.date_format or '' if mapping }}">
+    </label>
+  </div>
+  <div class="grid">
+    {{ pick("ticker_col", "종목 (티커 또는 '이름(TICKER)')", mapping.ticker if mapping) }}
+    {{ pick("side_col", "매수/매도 구분", mapping.side if mapping) }}
+  </div>
+  <div class="grid">
+    <label>매수로 볼 값 (쉼표 구분)<input name="buy_values" value="{{ (mapping.buy_values if mapping else ['매수','buy','BUY','Buy'])|join(',') }}"></label>
+    <label>매도로 볼 값 (쉼표 구분)<input name="sell_values" value="{{ (mapping.sell_values if mapping else ['매도','sell','SELL','Sell'])|join(',') }}"></label>
+  </div>
+  <div class="grid">
+    {{ pick("price_col", "체결 단가 (USD)", mapping.price if mapping) }}
+    {{ pick("quantity_col", "체결 수량", mapping.quantity if mapping) }}
+  </div>
+  <fieldset class="chips">
+    <legend>수수료·세금 컬럼 (합산, USD)</legend>
+    {% for c in columns %}
+    <label><input type="checkbox" name="fee_columns" value="{{ c }}" {% if mapping and c in mapping.fee_columns %}checked{% endif %}>{{ c }}</label>
+    {% endfor %}
+  </fieldset>
+  <button type="submit" onclick="this.setAttribute('aria-busy','true')">가져오기 (시세 조회로 조금 걸릴 수 있어요)</button>
+</form>
+{% endblock %}
