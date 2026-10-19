@@ -2,13 +2,16 @@
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Decision, Fill
 from app.services.importer.csv_parser import ParsedFill
+
+# 상담일(한국 날짜)과 체결일(미국 날짜)이 다르거나, 상담 후 하루이틀 뒤 사는 경우를 잇는다
+CONSULT_LINK_DAYS = 3
 
 
 @dataclass
@@ -53,7 +56,7 @@ def import_fills(db: Session, parsed: list[ParsedFill]) -> ImportSummary:
                 Decision.decided_on == day,
                 Decision.user_action != "skipped",
             )
-        ).first()
+        ).first() or _open_consult(db, ticker, side, day)
         if decision is None:
             decision = Decision(
                 ticker=ticker,
@@ -73,3 +76,19 @@ def import_fills(db: Session, parsed: list[ParsedFill]) -> ImportSummary:
 
     db.flush()
     return summary
+
+
+def _open_consult(db: Session, ticker: str, side: str, day: date) -> Decision | None:
+    """체결 직전 며칠 안에 한, 아직 체결이 연결되지 않은 상담 결정 (가장 최근 것)."""
+    return db.scalars(
+        select(Decision)
+        .where(
+            Decision.ticker == ticker,
+            Decision.side == side,
+            Decision.source == "consult",
+            Decision.user_action != "skipped",
+            Decision.decided_on.between(day - timedelta(days=CONSULT_LINK_DAYS), day),
+            ~Decision.fills.any(),
+        )
+        .order_by(Decision.decided_on.desc(), Decision.id.desc())
+    ).first()

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block content %}
+{% set v = detail.verdict %}
+{% set c = d.context or {} %}
+<hgroup>
+  <h2>{{ d.ticker }} 매수 판정</h2>
+  <p>{{ d.decided_on }} 상담 · 내 과거 매수 {{ detail.history_size }}건(청산 완료)과 비교</p>
+</hgroup>
+
+<article class="verdict-card {{ d.verdict }}">
+  <div class="verdict-head">
+    <span class="verdict-badge {{ d.verdict }} big">{{ VERDICTS[d.verdict] }}</span>
+    <div>
+      {% if v.n %}
+      <div class="verdict-prob">비슷한 상황에서 내 승률 <b>{{ "%.0f"|format(v.win_prob * 100) }}%</b>
+        <small class="muted">(80% 구간 {{ "%.0f"|format(v.ci_low * 100) }}–{{ "%.0f"|format(v.ci_high * 100) }}%)</small></div>
+      <div>비슷한 과거 매수 <b>{{ v.raw.n }}건</b> 중 <b>{{ v.raw.wins }}건</b> 수익
+        · 중앙값 <b class="{{ v.raw.median_return|tone }}">{{ v.raw.median_return|pct }}</b>
+        <small class="muted">(유사도 가중 평균 {{ v.avg_return|pct }})</small>
+        · SPY 대비 <b class="{{ v.avg_excess|tone }}">{{ v.avg_excess|pct }}</b>
+        · 보유 중 최대낙폭 평균 <b class="{{ v.avg_max_dd|tone }}">{{ v.avg_max_dd|pct }}</b></div>
+      {% if v.early_exit_rate is not none %}<div class="muted">판 뒤 20일간 5% 넘게 더 오른 비율(너무 일찍 판 비율): {{ "%.0f"|format(v.early_exit_rate * 100) }}%</div>{% endif %}
+      {% else %}
+      <div>비교할 만큼 비슷한 과거 매수가 아직 없어요. 표본 0건.</div>
+      {% endif %}
+    </div>
+  </div>
+  {% if d.verdict == "insufficient" %}
+  <p class="muted">유사 사례가 {{ v.n }}건뿐이라 승률을 단정하지 않아요 (최소 3건). 과거 매매에 <a href="/trades/tagging">이유를 태깅</a>하면 비교 정확도가 올라가요.</p>
+  {% endif %}
+  <footer class="disclaimer">유사도 가중 승률에 Beta(2,2) 보정을 적용한 값 · 표본 {{ v.n }}건(가중 {{ v.n_eff }}건) · 내 매매 기록 기반 참고용이며 투자 자문이 아닙니다.</footer>
+</article>
+
+{% if detail.flags %}
+<article>
+  <header><strong>지금 결정의 위험 신호</strong></header>
+  <ul class="flags">
+  {% for f in detail.flags %}<li class="flag {{ f.level }}">{{ f.text }}</li>{% endfor %}
+  </ul>
+</article>
+{% endif %}
+
+{% if detail.patterns %}
+<article>
+  <header><strong>이런 조건에서 나는</strong> <small class="muted">같은 이유·감정·상황이었던 과거 매수 전체</small></header>
+  <ul class="patterns">
+  {% for p in detail.patterns %}
+    <li><span class="{{ p.stats.median_return|tone }}">●</span> {{ p.sentence }}
+      {% if p.stats.win_rate is not none %}<small class="muted">(승률 {{ "%.0f"|format(p.stats.win_rate * 100) }}%)</small>{% endif %}</li>
+  {% endfor %}
+  </ul>
+</article>
+{% endif %}
+
+<article>
+  <header><strong>내가 남긴 계획</strong></header>
+  <p>{% for t in d.reason_tags %}<span class="tag">{{ BUY_REASONS.get(t, t) }}</span>{% endfor %}
+     <span class="muted">· {{ EMOTIONS.get(d.emotion, "–") }} · 확신도 {{ d.conviction or "–" }}/5</span></p>
+  {% if d.reason_text %}<blockquote>{{ d.reason_text }}</blockquote>{% endif %}
+  {% set px = c.last_close %}
+  <div class="metrics">
+    <div><small>현재가</small><b>{% if px %}${{ "%.2f"|format(px) }}{% else %}–{% endif %}</b></div>
+    <div><small>목표가</small><b>{% if d.target_price %}${{ "%g"|format(d.target_price|float) }}{% if px %} <small class="up">{{ ((d.target_price|float) / px - 1)|pct }}</small>{% endif %}{% else %}<span class="muted">없음</span>{% endif %}</b></div>
+    <div><small>손절가</small><b>{% if d.stop_price %}${{ "%g"|format(d.stop_price|float) }}{% if px %} <small class="down">{{ ((d.stop_price|float) / px - 1)|pct }}</small>{% endif %}{% else %}<span class="muted">없음</span>{% endif %}</b></div>
+    <div><small>보유 기간</small><b>{{ d.horizon_days ~ "일" if d.horizon_days else "없음" }}</b></div>
+  </div>
+</article>
+
+{% if matches %}
+<h4>비슷했던 내 과거 매수 {{ matches|length }}건</h4>
+<div class="match-grid">
+{% for m, past in matches %}
+  {% set pc = past.context or {} %}
+  {% set po = past.outcome or {} %}
+  <article class="match">
+    <header>
+      <strong>{{ past.decided_on }} · {{ past.ticker }}</strong>
+      <span class="{{ po.realized_return|tone }} result">{{ po.realized_return|pct }} {{ "수익" if po.win else "손실" }}</span>
+    </header>
+    <p class="sim muted">유사도 {{ "%.0f"|format(m.similarity * 100) }}%
+      {% set names = {"tags": "이유", "context": "상황", "emotion": "감정", "plan": "계획", "ticker": "종목"} %}
+      ({% for k, s in m.parts.items() %}{{ names[k] }} {{ "%.0f"|format(s * 100) }}{% if not loop.last %} · {% endif %}{% endfor %})</p>
+    <p>{% for t in past.reason_tags %}<span class="tag">{{ BUY_REASONS.get(t, t) }}</span>{% else %}<span class="muted">이유 미기록</span>{% endfor %}
+       {% if past.emotion and past.emotion != "unknown" %}<span class="muted">· {{ EMOTIONS[past.emotion] }}</span>{% endif %}</p>
+    <p class="ctx muted">
+      <span>5일 <b class="{{ pc.ret_5d|tone }}">{{ pc.ret_5d|pct }}</b></span>
+      <span>20일 <b class="{{ pc.ret_20d|tone }}">{{ pc.ret_20d|pct }}</b></span>
+      <span>고점 대비 {{ pc.from_52w_high|pct }}</span>
+      <span>RSI {{ pc.rsi14 if pc.rsi14 is not none else "–" }}</span>
+    </p>
+    <p class="ctx">보유 {{ po.holding_days }}일 · 최대낙폭 <span class="{{ po.max_drawdown|tone }}">{{ po.max_drawdown|pct }}</span>
+      · 판 뒤 20일 <span class="{{ po.post_exit_20d|tone }}">{{ po.post_exit_20d|pct }}</span></p>
+    {% if past.reason_text %}<small class="muted">“{{ past.reason_text }}”</small>{% endif %}
+  </article>
+{% endfor %}
+</div>
+{% endif %}
+
+<article>
+  <header><strong>그래서, 어떻게 하실 건가요?</strong> <small class="muted">안 산 것도 기록해 두면 나중에 '참은 게 잘한 건지' 알 수 있어요</small></header>
+  {% set labels = {"executed": "샀어요", "skipped": "안 살래요", "pending": "고민 중"} %}
+  <div class="actions">
+  {% for key, label in labels.items() %}
+    <form method="post" action="/consult/{{ d.id }}/action">
+      <input type="hidden" name="action" value="{{ key }}">
+      <button class="{{ '' if d.user_action == key else 'outline secondary' }}" {% if d.fills %}disabled{% endif %}>{{ label }}</button>
+    </form>
+  {% endfor %}
+    <form method="post" action="/consult/{{ d.id }}/rejudge"><button class="outline">최신 기록으로 다시 판정</button></form>
+  </div>
+  {% if d.fills %}<small class="muted">CSV 체결 {{ d.fills|length }}건이 이 상담에 연결됐어요.</small>{% endif %}
+  <small class="muted">판정 시각 {{ detail.judged_at }}</small>
+</article>
+
+{% if d.messages %}
+<details>
+  <summary>상담 대화 보기</summary>
+  {% for m in d.messages %}{% for b in m.content if b.type == "text" and b.text %}
+  <div class="bubble {{ m.role }}">{{ b.text }}</div>
+  {% endfor %}{% endfor %}
+</details>
+{% endif %}
+{% endblock %}

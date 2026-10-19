@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<hgroup>
+  <h2>판정 엔진 검증</h2>
+  <p>과거 각 매수 시점에, 그 전에 끝난 매매만으로 판정했다면? 실제 결과와 비교합니다.</p>
+</hgroup>
+<p class="muted"><small>엔진이 의미 있으려면 '비추천' 받은 매매의 실제 승률이 '추천'보다 낮아야 해요. 표본이 적을 땐 우연일 수 있어요.</small></p>
+<table>
+  <thead><tr><th>판정</th><th>건수</th><th>실제 수익</th><th>실제 승률</th><th>중앙값 수익률</th><th>평균 수익률</th></tr></thead>
+  <tbody>
+  {% for label, s in summary.items() %}
+  <tr>
+    <td><span class="verdict-badge {{ label }}">{{ VERDICTS[label] }}</span></td>
+    <td>{{ s.n }}</td><td>{{ s.wins }}</td>
+    <td>{{ "%.0f%%"|format(s.win_rate * 100) if s.win_rate is not none else "–" }}</td>
+    <td class="{{ s.median_return|tone }}">{{ s.median_return|pct }}</td>
+    <td class="{{ s.avg_return|tone }}">{{ s.avg_return|pct }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h4>매수별 판정</h4>
+<div class="overflow-auto">
+<table class="striped">
+  <thead><tr><th>날짜</th><th>종목</th><th>이유</th><th>당시 판정</th><th>당시 승률</th><th>유사 건수</th><th>실제 결과</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.case.decided_on }}</td>
+    <td><strong>{{ r.case.ticker }}</strong></td>
+    <td>{% for t in r.case.tags|sort %}<span class="tag">{{ BUY_REASONS.get(t, t) }}</span>{% else %}<span class="muted">–</span>{% endfor %}</td>
+    <td><span class="verdict-badge {{ r.verdict.label }}">{{ VERDICTS[r.verdict.label] }}</span></td>
+    <td>{{ "%.0f%%"|format(r.verdict.win_prob * 100) }}</td>
+    <td>{{ r.verdict.n }}</td>
+    <td class="{{ r.case.ret|tone }}">{{ r.case.ret|pct }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="muted">청산된 매수가 없습니다.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="disclaimer">내 매매 기록 기반 참고용이며 투자 자문이 아닙니다.</p>
+{% endblock %}

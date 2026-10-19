@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     app_password: str = "change-me"
     session_secret: str = "dev-secret-change-me"
     anthropic_api_key: str = ""
+    consult_model: str = "claude-opus-5-5"
+    consult_effort: str = "low"  # 대화형 상담은 짧은 응답 위주라 낮은 effort로 충분
     upload_dir: Path = ROOT_DIR / "data" / "uploads"
 
 

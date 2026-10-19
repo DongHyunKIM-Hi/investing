@@ -1,0 +1,227 @@
+import re
+from decimal import Decimal, InvalidOperation
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.db import get_db
+from app.models import Decision
+from app.services.consult import apply_record, chat, judge, start_consult, visible_messages
+from app.services.engine.backtest import backtest, summarize
+from app.services.engine.case import case_from_decision
+from app.services.engine.verdict import VERDICTS
+from app.services.llm.consult import ConsultError, RecordInput, get_llm
+from app.services.llm.keywords import suggest_tags
+from app.services.market.prices import PriceService
+from app.web import templates
+
+router = APIRouter()
+DB = Annotated[Session, Depends(get_db)]
+TICKER = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
+USER_ACTIONS = {"executed", "skipped", "pending"}
+
+
+def _llm():
+    return get_llm(settings.anthropic_api_key, settings.consult_model, settings.consult_effort)
+
+
+def _get(db: Session, decision_id: int) -> Decision:
+    d = db.get(Decision, decision_id)
+    if d is None or d.source != "consult":
+        raise HTTPException(404)
+    return d
+
+
+def _num(raw: str) -> float | None:
+    cleaned = raw.replace(",", "").replace("$", "").strip()
+    if not cleaned:
+        return None
+    try:
+        return float(Decimal(cleaned))
+    except InvalidOperation:
+        return None
+
+
+@router.get("/consult", response_class=HTMLResponse)
+def consult_home(request: Request, db: DB, ticker: str = "", error: str | None = None):
+    recent = db.scalars(
+        select(Decision).where(Decision.source == "consult").order_by(Decision.id.desc()).limit(20)
+    ).all()
+    return templates.TemplateResponse(
+        request,
+        "consult/home.html",
+        {"recent": recent, "ticker": ticker, "error": error, "VERDICTS": VERDICTS},
+    )
+
+
+@router.post("/consult")
+def consult_start(request: Request, db: DB, ticker: Annotated[str, Form()]):
+    symbol = ticker.strip().upper()
+    if not TICKER.match(symbol):
+        return consult_home(request, db, ticker, error="티커 형식이 아닙니다 (예: IONQ)")
+    try:
+        d = start_consult(db, symbol, PriceService(db))
+    except ValueError as e:
+        db.rollback()
+        return consult_home(request, db, ticker, error=str(e))
+    db.commit()
+    return RedirectResponse(f"/consult/{d.id}", status_code=303)
+
+
+@router.get("/consult/{decision_id}", response_class=HTMLResponse)
+def consult_page(request: Request, db: DB, decision_id: int):
+    d = _get(db, decision_id)
+    if d.verdict is None:
+        suggested, emotion = suggest_tags(d.reason_text or "")
+        return templates.TemplateResponse(
+            request,
+            "consult/talk.html",
+            {
+                "d": d,
+                "messages": visible_messages(d),
+                "llm_enabled": _llm() is not None,
+                "suggested": suggested,
+                "suggested_emotion": emotion,
+                "error": None,
+            },
+        )
+    detail = d.verdict_detail or {}
+    ids = [m["id"] for m in detail.get("matches", [])]
+    by_id = {x.id: x for x in db.scalars(select(Decision).where(Decision.id.in_(ids)))}
+    matches = [(m, by_id[m["id"]]) for m in detail.get("matches", []) if m["id"] in by_id]
+    return templates.TemplateResponse(
+        request,
+        "consult/verdict.html",
+        {"d": d, "detail": detail, "matches": matches, "VERDICTS": VERDICTS},
+    )
+
+
+@router.post("/consult/{decision_id}/chat", response_class=HTMLResponse)
+def consult_chat(request: Request, db: DB, decision_id: int, message: Annotated[str, Form()]):
+    d = _get(db, decision_id)
+    llm = _llm()
+    text = message.strip()
+    if llm is None or d.verdict is not None or not text:
+        raise HTTPException(400)
+    try:
+        done = chat(db, d, llm, text)
+    except ConsultError as e:
+        db.rollback()
+        db.refresh(d)
+        return templates.TemplateResponse(
+            request,
+            "consult/_messages.html",
+            {"d": d, "messages": visible_messages(d), "error": str(e)},
+        )
+    db.commit()
+    if done:
+        return Response(headers={"HX-Redirect": f"/consult/{d.id}"})
+    return templates.TemplateResponse(
+        request, "consult/_messages.html", {"d": d, "messages": visible_messages(d), "error": None}
+    )
+
+
+@router.post("/consult/{decision_id}/suggest", response_class=HTMLResponse)
+def consult_suggest(
+    request: Request,
+    decision_id: int,
+    reason_text: Annotated[str, Form()] = "",
+    reasons: Annotated[list[str] | None, Form()] = None,
+    emotion: Annotated[str, Form()] = "unknown",
+):
+    """이유를 적고 나면 키워드로 태그를 미리 골라 준다 (API 키 없이 동작). 이미 고른 건 유지."""
+    suggested, suggested_emotion = suggest_tags(reason_text)
+    return templates.TemplateResponse(
+        request,
+        "consult/_chips.html",
+        {
+            "suggested": [*(reasons or []), *suggested],
+            "suggested_emotion": emotion if emotion != "unknown" else suggested_emotion,
+        },
+    )
+
+
+@router.post("/consult/{decision_id}/form", response_class=HTMLResponse)
+def consult_form(
+    request: Request,
+    db: DB,
+    decision_id: int,
+    reason_text: Annotated[str, Form()] = "",
+    reasons: Annotated[list[str] | None, Form()] = None,
+    emotion: Annotated[str, Form()] = "unknown",
+    conviction: Annotated[int, Form()] = 3,
+    target_price: Annotated[str, Form()] = "",
+    stop_price: Annotated[str, Form()] = "",
+    horizon_days: Annotated[str, Form()] = "",
+):
+    d = _get(db, decision_id)
+    if d.verdict is not None:
+        return RedirectResponse(f"/consult/{d.id}", status_code=303)
+    try:
+        record = RecordInput.model_validate(
+            {
+                "reason_tags": reasons or ["unknown"],
+                "emotion": emotion,
+                "conviction": conviction,
+                "target_price": _num(target_price),
+                "stop_price": _num(stop_price),
+                "horizon_days": int(horizon_days) if horizon_days.strip().isdigit() else None,
+                "reason_summary": reason_text,
+            }
+        )
+    except ValidationError as e:
+        suggested, emo = suggest_tags(reason_text)
+        return templates.TemplateResponse(
+            request,
+            "consult/talk.html",
+            {
+                "d": d,
+                "messages": visible_messages(d),
+                "llm_enabled": _llm() is not None,
+                "suggested": suggested,
+                "suggested_emotion": emo,
+                "error": f"입력값을 확인하세요: {e.errors()[0]['msg']}",
+            },
+            status_code=422,
+        )
+    apply_record(d, record, reason_text)
+    judge(db, d)
+    db.commit()
+    return RedirectResponse(f"/consult/{d.id}", status_code=303)
+
+
+@router.post("/consult/{decision_id}/rejudge")
+def consult_rejudge(db: DB, decision_id: int):
+    d = _get(db, decision_id)
+    if d.tagged_at is None:
+        raise HTTPException(400)
+    judge(db, d)
+    db.commit()
+    return RedirectResponse(f"/consult/{d.id}", status_code=303)
+
+
+@router.post("/consult/{decision_id}/action")
+def consult_action(db: DB, decision_id: int, action: Annotated[str, Form()]):
+    d = _get(db, decision_id)
+    if action not in USER_ACTIONS:
+        raise HTTPException(400)
+    if not d.fills:  # CSV로 실제 체결이 연결된 뒤에는 '샀음'이 사실이므로 바꾸지 않는다
+        d.user_action = action
+    db.commit()
+    return RedirectResponse(f"/consult/{d.id}", status_code=303)
+
+
+@router.get("/backtest", response_class=HTMLResponse)
+def backtest_page(request: Request, db: DB):
+    decisions = db.scalars(select(Decision).where(Decision.side == "buy")).all()
+    rows = backtest([case_from_decision(d) for d in decisions])
+    return templates.TemplateResponse(
+        request,
+        "consult/backtest.html",
+        {"rows": rows, "summary": summarize(rows), "VERDICTS": VERDICTS},
+    )

@@ -1,0 +1,14 @@
+{% set c = d.context or {} %}
+<article class="situation">
+  <header><strong>{{ d.ticker }} 지금 상황</strong> <small class="muted">{{ c.as_of or "–" }} 종가 기준 · 오늘 시세는 반영 안 함</small></header>
+  <div class="metrics">
+    <div><small>현재가</small><b>{% if c.last_close %}${{ "%.2f"|format(c.last_close) }}{% else %}–{% endif %}</b></div>
+    <div><small>직전 5일</small><b class="{{ c.ret_5d|tone }}">{{ c.ret_5d|pct }}</b></div>
+    <div><small>직전 20일</small><b class="{{ c.ret_20d|tone }}">{{ c.ret_20d|pct }}</b></div>
+    <div><small>52주 고점 대비</small><b>{{ c.from_52w_high|pct }}</b></div>
+    <div><small>50일선 대비</small><b class="{{ c.vs_ma50|tone }}">{{ c.vs_ma50|pct }}</b></div>
+    <div><small>RSI(14)</small><b>{{ c.rsi14 if c.rsi14 is not none else "–" }}</b></div>
+    <div><small>SPY 20일</small><b class="{{ c.spy_ret_20d|tone }}">{{ c.spy_ret_20d|pct }}</b></div>
+    <div><small>다음 실적</small><b>{{ c.next_earnings or "–" }}</b></div>
+  </div>
+</article>
