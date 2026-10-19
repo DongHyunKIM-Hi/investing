@@ -14,9 +14,11 @@
       <ul><li><strong>껄무새 탈출</strong></li></ul>
       {% if request.session.get("auth") %}
       <ul>
+        <li><a href="/consult">매수 상담</a></li>
         <li><a href="/trades">매매 기록</a></li>
         <li><a href="/trades/import">CSV 가져오기</a></li>
         <li><a href="/trades/tagging">이유 태깅</a></li>
+        <li><a href="/backtest">엔진 검증</a></li>
         <li><form method="post" action="/logout" style="margin:0"><button class="outline secondary" style="padding:.3rem .8rem">로그아웃</button></form></li>
       </ul>
       {% endif %}

@@ -1,3 +1,4 @@
+import logging
 from datetime import date, timedelta
 from typing import Protocol
 
@@ -9,6 +10,13 @@ class MarketDataProvider(Protocol):
     def daily_bars(self, ticker: str, start: date, end: date) -> pd.DataFrame:
         """date 인덱스, 컬럼 close / adj_close / volume. end 포함."""
         ...
+
+    def next_earnings(self, ticker: str) -> date | None:
+        """다음 실적발표 예정일. 모르면 None (상담 시점 경고용, 과거 매매에는 쓰지 않는다)."""
+        ...
+
+
+log = logging.getLogger(__name__)
 
 
 class YahooProvider:
@@ -25,3 +33,12 @@ class YahooProvider:
         )
         df.index = [ts.date() for ts in raw.index]
         return df.dropna()
+
+    def next_earnings(self, ticker: str) -> date | None:
+        try:
+            dates = yf.Ticker(ticker).calendar.get("Earnings Date") or []
+        except Exception:  # 비공식 API라 형식이 자주 바뀐다: 경고 하나 못 띄우는 정도로 끝낸다
+            log.warning("earnings date lookup failed: %s", ticker, exc_info=True)
+            return None
+        upcoming = sorted(d for d in dates if isinstance(d, date) and d >= date.today())
+        return upcoming[0] if upcoming else None

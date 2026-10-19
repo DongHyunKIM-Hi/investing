@@ -1,0 +1,7 @@
+<div id="chat">
+  <div class="bubble assistant">{{ d.ticker }}, 왜 사려고 하세요? 무엇을 보고 사고 싶어졌는지 편하게 말해 주세요.</div>
+  {% for m in messages %}
+  <div class="bubble {{ m.role }}">{{ m.text }}</div>
+  {% endfor %}
+  {% if error %}<p class="flag high">{{ error }}</p>{% endif %}
+</div>

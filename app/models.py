@@ -34,9 +34,12 @@ class Decision(Base):
     context: Mapped[dict[str, Any] | None] = mapped_column(JSONB)  # 결정 시점 시장 지표
     outcome: Mapped[dict[str, Any] | None] = mapped_column(JSONB)  # 결과 지표
 
+    # recommend | caution | against | insufficient
     verdict: Mapped[str | None] = mapped_column(String(16))
     win_prob: Mapped[float | None]
     similar_ids: Mapped[list[int]] = mapped_column(JSONB, default=list)
+    # 판정 당시 근거(표본 수·신뢰구간·패턴·경고). 데이터가 늘어도 그때 본 판정을 보존한다
+    verdict_detail: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     user_action: Mapped[str] = mapped_column(
         String(16), default="executed"
     )  # executed|skipped|pending
@@ -44,6 +47,25 @@ class Decision(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     fills: Mapped[list["Fill"]] = relationship(back_populates="decision")
+    messages: Mapped[list["ConsultMessage"]] = relationship(
+        back_populates="decision", order_by="ConsultMessage.id", cascade="all, delete-orphan"
+    )
+
+
+class ConsultMessage(Base):
+    """상담 대화 1턴. content는 Claude API 메시지 content 그대로(블록 목록) 저장해 재전송한다."""
+
+    __tablename__ = "consult_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    decision_id: Mapped[int] = mapped_column(
+        ForeignKey("decisions.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(16))  # user | assistant
+    content: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    decision: Mapped[Decision] = relationship(back_populates="messages")
 
 
 class Fill(Base):

@@ -65,7 +65,9 @@ def _recompute_ticker(db: Session, ticker: str, prices: PriceService) -> list[st
         if not d.fills:
             continue
         ids = {f.id for f in d.fills}
-        d.context = build_snapshot(bars["adj_close"], spy, d.decided_on)
+        snap = build_snapshot(bars["adj_close"], spy, d.decided_on)
+        # 상담 때 저장한 현재가·실적일 같은 항목은 남긴다
+        d.context = {**(d.context or {}), **snap} if snap else d.context
         if d.side == "buy":
             d.outcome = buy_outcome(
                 [lite[i] for i in ids],

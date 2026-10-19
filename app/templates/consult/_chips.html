@@ -1,0 +1,14 @@
+<div id="chips">
+  <fieldset class="chips">
+    <legend>이유 (여러 개 가능){% if suggested %} <small class="muted">· 적은 내용으로 미리 골랐어요</small>{% endif %}</legend>
+    {% for key, label in BUY_REASONS.items() if key != "unknown" %}
+    <label><input type="checkbox" name="reasons" value="{{ key }}" {% if key in suggested %}checked{% endif %}>{{ label }}</label>
+    {% endfor %}
+  </fieldset>
+  <fieldset class="chips">
+    <legend>지금 기분</legend>
+    {% for key, label in EMOTIONS.items() %}
+    <label><input type="radio" name="emotion" value="{{ key }}" {% if key == (suggested_emotion or "unknown") %}checked{% endif %}>{{ "모르겠음" if key == "unknown" else label }}</label>
+    {% endfor %}
+  </fieldset>
+</div>

@@ -9,3 +9,33 @@
 .ctx span { margin-right: 1rem; }
 .disclaimer { font-size: .8rem; color: var(--pico-muted-color); }
 table td, table th { white-space: nowrap; }
+
+/* 상담 · 판정 */
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: .6rem 1rem; }
+.metrics div { display: flex; flex-direction: column; }
+.metrics small { color: var(--pico-muted-color); font-size: .75rem; }
+.bubble { padding: .6rem .9rem; border-radius: 12px; margin: .4rem 0; max-width: 85%; white-space: pre-wrap; }
+.bubble.assistant { background: var(--pico-secondary-background); color: var(--pico-secondary-inverse); }
+.bubble.user { background: var(--pico-primary-background); color: var(--pico-primary-inverse); margin-left: auto; }
+.flag { list-style: none; margin: .3rem 0; padding-left: .6rem; border-left: 3px solid #f29900; }
+.flag.high { border-left-color: #c62828; font-weight: 600; }
+ul.flags, ul.patterns { padding-left: 0; }
+ul.patterns li { list-style: none; margin: .3rem 0; }
+.verdict-badge { display: inline-block; padding: .1rem .6rem; border-radius: 6px; font-weight: 700; font-size: .85rem; color: #fff; background: #6b7280; }
+.verdict-badge.big { font-size: 1.6rem; padding: .4rem 1rem; }
+.verdict-badge.recommend { background: #0f8a4f; }
+.verdict-badge.caution { background: #d98b00; }
+.verdict-badge.against { background: #3b3b46; }
+.verdict-badge.insufficient { background: #9ca3af; }
+.verdict-card.recommend { border-top: 4px solid #0f8a4f; }
+.verdict-card.caution { border-top: 4px solid #d98b00; }
+.verdict-card.against { border-top: 4px solid #3b3b46; }
+.verdict-card.insufficient { border-top: 4px solid #9ca3af; }
+.verdict-head { display: flex; gap: 1.2rem; align-items: center; flex-wrap: wrap; }
+.verdict-prob { font-size: 1.15rem; }
+.match-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 0 1rem; }
+.match header { display: flex; justify-content: space-between; }
+.match p { margin-bottom: .4rem; }
+.sim { font-size: .8rem; }
+.actions { display: flex; gap: .6rem; flex-wrap: wrap; }
+.actions form { margin: 0; }

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<hgroup>
+  <h2>{{ d.ticker }} 매수 상담</h2>
+  <p>사기 전에 이유와 계획을 남기면, 비슷했던 내 과거 매매의 결과로 판정해 드려요.</p>
+</hgroup>
+{% include "consult/_situation.html" %}
+{% if error %}<p class="flag high">{{ error }}</p>{% endif %}
+
+{% if llm_enabled %}
+<article>
+  <header><strong>대화로 상담</strong> <small class="muted">이유와 계획을 다 들으면 자동으로 판정 화면으로 넘어가요</small></header>
+  {% include "consult/_messages.html" %}
+  <form hx-post="/consult/{{ d.id }}/chat" hx-target="#chat" hx-swap="outerHTML"
+        hx-disabled-elt="find button" hx-indicator="#thinking" hx-on::after-request="if(event.detail.successful) this.reset()">
+    <fieldset role="group">
+      <input name="message" placeholder="예: 양자컴퓨터 뉴스 보고 며칠째 오르길래요" autocomplete="off" required>
+      <button type="submit">보내기</button>
+    </fieldset>
+    <small id="thinking" class="htmx-indicator muted">생각 중…</small>
+  </form>
+</article>
+{% else %}
+<p class="muted"><small>.env에 <code>ANTHROPIC_API_KEY</code>를 넣으면 Claude와 대화로 상담할 수 있어요. 지금은 직접 입력으로 진행합니다.</small></p>
+{% endif %}
+
+<details {% if not llm_enabled %}open{% endif %}>
+  <summary>{% if llm_enabled %}대화 대신 직접 입력하기{% else %}직접 입력{% endif %}</summary>
+  <form method="post" action="/consult/{{ d.id }}/form">
+    <label>왜 사려고 하세요?
+      <textarea name="reason_text" rows="2" placeholder="예: 양자컴퓨터 뉴스 나오고 5일째 오르는데 지금 안 사면 놓칠 것 같아서"
+        hx-post="/consult/{{ d.id }}/suggest" hx-trigger="change" hx-include="closest form" hx-target="#chips" hx-swap="outerHTML">{{ d.reason_text or "" }}</textarea>
+    </label>
+    {% include "consult/_chips.html" %}
+    <label>확신도 <output id="conv-out">3</output>/5
+      <input type="range" name="conviction" min="1" max="5" value="3" oninput="document.getElementById('conv-out').value=this.value">
+    </label>
+    <div class="grid">
+      <label>목표가 ($)<input name="target_price" inputmode="decimal" placeholder="{% if d.context and d.context.last_close %}현재 {{ '%.2f'|format(d.context.last_close) }}{% endif %}"></label>
+      <label>손절가 ($)<input name="stop_price" inputmode="decimal" placeholder="비우면 '손절 계획 없음'"></label>
+      <label>보유 기간 (일)<input name="horizon_days" inputmode="numeric" placeholder="예: 30"></label>
+    </div>
+    <button type="submit">판정 받기</button>
+  </form>
+</details>
+{% endblock %}
