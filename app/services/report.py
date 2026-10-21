@@ -63,7 +63,7 @@ def sell_case_from_decision(d: "Decision") -> SellCase:
 
 @dataclass(frozen=True)
 class SkipCase:
-    """상담 후 안 사기로 한 결정. fwd_*는 그날 종가에 샀다면의 수익률."""
+    """상담 후 안 사기로(매도 상담이면 안 팔기로) 한 결정. fwd_*는 그날 종가 대비 이후 수익률."""
 
     id: int
     ticker: str
@@ -71,6 +71,7 @@ class SkipCase:
     verdict: str | None
     fwd_20d: float | None
     fwd_60d: float | None
+    side: str = "buy"
 
 
 def skip_case_from_decision(d: "Decision") -> SkipCase:
@@ -82,6 +83,7 @@ def skip_case_from_decision(d: "Decision") -> SkipCase:
         verdict=d.verdict,
         fwd_20d=o.get("fwd_20d"),
         fwd_60d=o.get("fwd_60d"),
+        side=d.side,
     )
 
 
@@ -90,8 +92,10 @@ class SkipGroup:
     key: str
     label: str
     n: int  # 보류 후 20거래일이 지난 건
-    good: int  # 샀다면 20일 뒤 손실 → 참길 잘함
-    missed: int  # 샀다면 20일 뒤 EARLY_EXIT 넘게 수익 → 껄
+    # 안 산 것: 20일 뒤 손실이면 잘 참음, EARLY_EXIT 넘게 올랐으면 껄
+    # 안 판 것: 20일 뒤 그대로거나 올랐으면 잘 버팀, EARLY_EXIT 넘게 떨어졌으면 껄(팔걸)
+    good: int
+    missed: int
     median_20d: float | None
     tracking: int  # 아직 20거래일이 안 지난 건
 
@@ -100,14 +104,15 @@ class SkipGroup:
         return self.good / self.n if self.n else None
 
 
-def skip_group(key: str, label: str, skips: Sequence[SkipCase]) -> SkipGroup:
+def skip_group(key: str, label: str, skips: Sequence[SkipCase], side: str = "buy") -> SkipGroup:
     known = [s.fwd_20d for s in skips if s.fwd_20d is not None]
+    sign = 1 if side == "buy" else -1  # 안 판 것은 떨어져야 껄
     return SkipGroup(
         key=key,
         label=label,
         n=len(known),
-        good=sum(1 for v in known if v <= 0),
-        missed=sum(1 for v in known if v > EARLY_EXIT),
+        good=sum(1 for v in known if sign * v <= 0),
+        missed=sum(1 for v in known if sign * v > EARLY_EXIT),
         median_20d=median(known),
         tracking=len(skips) - len(known),
     )
@@ -172,9 +177,11 @@ class Report:
     early_exits: EarlyExits
     holding: Holding
     sells: list[SellGroup]
-    skips: SkipGroup
+    skips: SkipGroup  # 안 산 것
     skips_by_verdict: list[SkipGroup]  # 판정 라벨 순. 해당 건이 없는 라벨은 뺀다
-    recent_skips: list[SkipCase]
+    holds: SkipGroup  # 매도 상담 후 안 판 것
+    holds_by_verdict: list[SkipGroup]
+    recent_skips: list[SkipCase]  # 둘 다, 최근 순
 
 
 def _groups(
@@ -257,11 +264,19 @@ def sell_groups(sells: Sequence[SellCase]) -> list[SellGroup]:
     return found
 
 
+def _skips_by_verdict(skips: Sequence[SkipCase], side: str) -> list[SkipGroup]:
+    return [
+        skip_group(key, label, members, side)
+        for key, label in VERDICTS.items()
+        if (members := [s for s in skips if s.side == side and s.verdict == key])
+    ]
+
+
 def build_report(
     buys: Sequence[Case], sells: Sequence[SellCase] = (), skips: Sequence[SkipCase] = ()
 ) -> Report:
     """buys: 체결이 있는 매수 결정 전부(보유 중 포함). sells: 체결이 있는 매도 결정.
-    skips: 상담 후 안 사기로 한 결정."""
+    skips: 상담 후 안 사기로(또는 안 팔기로) 한 결정."""
     closed = [c for c in buys if c.win is not None]
 
     by_tag = _groups("tag", BUY_REASONS.items(), lambda k, c: k in c.tags, closed)
@@ -293,11 +308,9 @@ def build_report(
         early_exits=early_exits(closed),
         holding=holding(closed),
         sells=sell_groups(sells),
-        skips=skip_group("all", "전체", skips),
-        skips_by_verdict=[
-            skip_group(key, label, members)
-            for key, label in VERDICTS.items()
-            if (members := [s for s in skips if s.verdict == key])
-        ],
+        skips=skip_group("all", "전체", [s for s in skips if s.side == "buy"]),
+        skips_by_verdict=_skips_by_verdict(skips, "buy"),
+        holds=skip_group("all", "전체", [s for s in skips if s.side == "sell"], "sell"),
+        holds_by_verdict=_skips_by_verdict(skips, "sell"),
         recent_skips=sorted(skips, key=lambda s: (s.decided_on, s.id), reverse=True)[:RECENT_SKIPS],
     )

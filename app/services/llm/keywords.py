@@ -37,6 +37,23 @@ REASON_KEYWORDS: dict[str, tuple[str, ...]] = {
     "long_term": ("장기", "10년", "5년", "모아", "적립", "노후"),
 }
 
+SELL_REASON_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "target_hit": ("목표가", "목표 도달", "목표에", "목표했던"),
+    "stop_loss": ("손절", "손절가", "스탑"),
+    "fear": ("불안", "무섭", "걱정", "겁", "더 떨어질", "폭락할", "하락장"),
+    "boredom": ("지루", "안 움직", "횡보", "답답", "제자리", "물려"),
+    "need_cash": ("현금", "돈이 필요", "다른 종목", "갈아타", "옮기", "생활비"),
+    "thesis_broken": (
+        "이유가 사라",
+        "산 이유",
+        "전망이 바뀌",
+        "악재",
+        "실적 부진",
+        "가이던스 하향",
+    ),
+    "take_profit": ("익절", "수익 실현", "적당히", "벌었으니", "챙기"),
+}
+
 EMOTION_KEYWORDS: dict[str, tuple[str, ...]] = {
     "fomo": ("놓칠", "늦기 전", "지금 아니면", "나만", "조급", "fomo", "포모"),
     "revenge": ("만회", "복구", "본전", "손실 메", "잃은"),
@@ -50,9 +67,10 @@ def _hits(text: str, words: tuple[str, ...]) -> bool:
     return any(w in text for w in words)
 
 
-def suggest_tags(text: str) -> tuple[list[str], str | None]:
+def suggest_tags(text: str, side: str = "buy") -> tuple[list[str], str | None]:
     """(이유 태그 목록, 감정). 못 찾으면 ([], None)."""
     t = re.sub(r"\s+", " ", text.lower())
-    reasons = [key for key, words in REASON_KEYWORDS.items() if _hits(t, words)]
+    table = REASON_KEYWORDS if side == "buy" else SELL_REASON_KEYWORDS
+    reasons = [key for key, words in table.items() if _hits(t, words)]
     emotion = next((key for key, words in EMOTION_KEYWORDS.items() if _hits(t, words)), None)
     return reasons, emotion

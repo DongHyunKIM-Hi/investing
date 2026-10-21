@@ -95,3 +95,12 @@ def test_skip_outcome_still_tracking():
     # 오늘 보류해서 아직 다음 거래일이 없으면 모두 비어 있다
     today = skip_outcome(prices, prices, START + timedelta(days=2))
     assert today["max_drawdown_20d"] is None and today["tracked_days"] == 0
+
+
+def test_sell_outcome_records_resolution_day():
+    prices = series([100] * 25)
+    buy, sell = fill(1, 0, "100", "10"), fill(2, 2, "100", "10")
+    out = sell_outcome([sell], [Leg(buy, sell, D("10"))], prices)
+    assert out["post_exit_on"] == (START + timedelta(days=22)).isoformat()
+    early = sell_outcome([sell], [Leg(buy, sell, D("10"))], series([100] * 10))
+    assert early["post_exit_on"] is None and early["post_exit_20d"] is None

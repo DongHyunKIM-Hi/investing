@@ -1,0 +1,27 @@
+{% set c = d.context or {} %}
+{% set bp = c.buy_plan %}
+<article class="position">
+  <header><strong>내 보유 현황</strong>
+    {% if c.position_manual %}<small class="muted">직접 입력한 평단가 기준</small>{% elif c.opened_on %}<small class="muted">CSV 체결 기준 · 첫 매수 {{ c.opened_on }}</small>{% endif %}</header>
+  {% if c.avg_cost %}
+  <div class="metrics">
+    <div><small>평단가</small><b>${{ "%.2f"|format(c.avg_cost) }}</b></div>
+    <div><small>평가 손익</small><b class="{{ c.position_return|tone }}">{{ c.position_return|pct }}</b></div>
+    {% if c.position_qty %}<div><small>수량</small><b>{{ "%g"|format(c.position_qty) }}주</b></div>{% endif %}
+    {% if c.held_days is not none %}<div><small>보유</small><b>{{ c.held_days }}일</b></div>{% endif %}
+  </div>
+  {% else %}
+  <p class="muted">CSV에 이 종목 보유 기록이 없어요. 평단가를 알려 주시면 손익을 계산해요.</p>
+  {% endif %}
+  {% if bp %}
+  <p class="ctx" style="margin-top:.6rem"><strong>살 때 계획</strong> <small class="muted">({{ bp.decided_on }} 상담)</small>
+    {% for t in bp.reason_tags %}<span class="tag">{{ BUY_REASONS.get(t, t) }}</span>{% endfor %}
+    <span>목표가 {{ "$%g"|format(bp.target_price) if bp.target_price else "없음" }}</span>
+    <span>손절가 {{ "$%g"|format(bp.stop_price) if bp.stop_price else "없음" }}</span>
+    <span>기간 {{ bp.horizon_days ~ "일" if bp.horizon_days else "없음" }}</span>
+  </p>
+  {% if bp.reason_text %}<small class="muted">살 때 이유: “{{ bp.reason_text }}”</small>{% endif %}
+  {% elif c.avg_cost %}
+  <p class="muted"><small>이 주식을 살 때 남긴 상담 기록은 없어요.</small></p>
+  {% endif %}
+</article>

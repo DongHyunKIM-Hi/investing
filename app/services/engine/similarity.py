@@ -23,6 +23,7 @@ CONTEXT_SCALES: dict[str, float] = {
     "vs_ma50": 0.15,
     "rsi14": 15.0,
     "spy_ret_20d": 0.05,
+    "position_return": 0.20,  # 매도만: 팔 때 수익 중이었나 손실 중이었나
 }
 WEIGHTS: dict[str, float] = {
     "tags": 0.40,

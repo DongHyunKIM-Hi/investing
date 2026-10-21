@@ -4,6 +4,7 @@ from app.services.engine.checks import Plan, check_plan
 from app.services.llm.consult import (
     RECORD_TOOL,
     SYSTEM_PROMPT,
+    RecordInput,
     situation_text,
     to_turn,
     tool_result,
@@ -89,7 +90,7 @@ def test_to_turn_record():
         },
     ]
     turn = to_turn(content)
-    assert turn.record is not None and turn.tool_use_id == "toolu_1"
+    assert isinstance(turn.record, RecordInput) and turn.tool_use_id == "toolu_1"
     assert turn.record.stop_price is None and turn.record.conviction == 4
 
 

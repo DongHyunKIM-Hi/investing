@@ -1,7 +1,7 @@
 <div id="chips">
   <fieldset class="chips">
     <legend>이유 (여러 개 가능){% if suggested %} <small class="muted">· 적은 내용으로 미리 골랐어요</small>{% endif %}</legend>
-    {% for key, label in BUY_REASONS.items() if key != "unknown" %}
+    {% for key, label in reasons_for(d.side).items() if key != "unknown" %}
     <label><input type="checkbox" name="reasons" value="{{ key }}" {% if key in suggested %}checked{% endif %}>{{ label }}</label>
     {% endfor %}
   </fieldset>

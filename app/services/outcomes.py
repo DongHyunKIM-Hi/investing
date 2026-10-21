@@ -60,6 +60,12 @@ def forward_return(s: pd.Series, start: date, days: int = POST_EXIT_DAYS) -> flo
     return float(after.iloc[days - 1]) / base - 1
 
 
+def forward_date(s: pd.Series, start: date, days: int = POST_EXIT_DAYS) -> date | None:
+    """start 이후 N번째 거래일. 아직 안 왔으면 None."""
+    after = s[s.index > start]
+    return after.index[days - 1] if len(after) >= days else None
+
+
 def _leg_pnl(leg: Leg) -> tuple[Decimal, Decimal]:
     """(원가, 회수금액). 수수료는 체결 수량 비율로 배분."""
     q = leg.quantity
@@ -132,6 +138,8 @@ def sell_outcome(sells: list[FillLite], legs: list[Leg], adj: pd.Series) -> dict
         "holding_days": (sold_on - held_from).days if held_from else None,
         # 판 뒤 20거래일 동안 더 올랐다면 '너무 일찍 판' 신호
         "post_exit_20d": _r(forward_return(adj, sold_on)),
+        # 위 값이 확정된 날. 매도 판정에서 이날 이전의 상담에는 이 매도를 쓰지 않는다
+        "post_exit_on": post_on.isoformat() if (post_on := forward_date(adj, sold_on)) else None,
     }
 
 

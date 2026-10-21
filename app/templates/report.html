@@ -167,18 +167,24 @@
 {% endif %}
 
 {% set k = r.skips %}
-<h3>안 산 것: 참은 게 잘한 건지</h3>
-{% if k.n or k.tracking %}
-<p class="muted"><small>상담 후 '안 살래요'를 고른 결정을 그날 종가에 샀다고 치고 20거래일 뒤와 비교해요.
-  손실이었으면 '잘 참음', {{ "%.0f"|format(EARLY_EXIT * 100) }}% 넘게 올랐으면 '껄'이에요.</small></p>
-{% if k.n %}
+{% set hd = r.holds %}
+<h3>안 산 것·안 판 것: 참은 게 잘한 건지</h3>
+{% if k.n or k.tracking or hd.n or hd.tracking %}
+<p class="muted"><small>상담 후 '안 살래요'·'안 팔래요'를 고른 결정을 그날 종가와 20거래일 뒤를 비교해요.
+  {{ "%.0f"|format(EARLY_EXIT * 100) }}% 넘게 반대로 움직였으면 '껄'이에요.</small></p>
+{% for title, g0, groups, good_label, prefix in [
+     ("안 산 것", k, r.skips_by_verdict, "잘 참음 (그 뒤 하락)", "매수 "),
+     ("안 판 것", hd, r.holds_by_verdict, "잘 버팀 (그 뒤 상승)", "매도 ")] %}
+{% if g0.n or g0.tracking %}
+<h4>{{ title }}</h4>
+{% if g0.n %}
 <div class="overflow-auto">
 <table class="striped report-table">
-  <thead><tr><th>상담 판정</th><th>건수</th><th>잘 참음</th><th>껄</th><th>샀다면 20일 (중앙값)</th></tr></thead>
+  <thead><tr><th>상담 판정</th><th>건수</th><th>{{ good_label }}</th><th>껄</th><th>20일 뒤 주가 (중앙값)</th></tr></thead>
   <tbody>
-  {% for g in [k] + r.skips_by_verdict %}
+  {% for g in [g0] + groups %}
   <tr class="{{ 'few' if g.n < MIN_SAMPLES and g.key != 'all' }}">
-    <td>{% if g.key == "all" %}<strong>전체</strong>{% else %}<span class="verdict-badge {{ g.key }}">{{ g.label }}</span>{% endif %}
+    <td>{% if g.key == "all" %}<strong>전체</strong>{% else %}<span class="verdict-badge {{ g.key }}">{{ prefix if g.key in ("recommend", "against") }}{{ g.label }}</span>{% endif %}
       {% if g.tracking %} <small class="muted">+ 추적 중 {{ g.tracking }}건</small>{% endif %}</td>
     <td>{{ g.n }}</td>
     <td>{{ rate(g.good, g.n) }}</td>
@@ -190,17 +196,20 @@
 </table>
 </div>
 {% else %}
-<p class="muted">보류한 {{ k.tracking }}건 모두 아직 20거래일이 안 지났어요.</p>
+<p class="muted">{{ g0.tracking }}건 모두 아직 20거래일이 안 지났어요.</p>
 {% endif %}
+{% endif %}
+{% endfor %}
 <details>
   <summary>최근 보류한 결정</summary>
   <table class="striped">
-    <thead><tr><th>날짜</th><th>종목</th><th>판정</th><th>샀다면 20일</th><th>샀다면 60일</th></tr></thead>
+    <thead><tr><th>날짜</th><th>종목</th><th>구분</th><th>판정</th><th>20일 뒤</th><th>60일 뒤</th></tr></thead>
     <tbody>
     {% for s in r.recent_skips %}
     <tr>
       <td>{{ s.decided_on }}</td>
       <td><a href="/consult/{{ s.id }}"><strong>{{ s.ticker }}</strong></a></td>
+      <td>{{ "안 삼" if s.side == "buy" else "안 팖" }}</td>
       <td>{% if s.verdict %}<span class="verdict-badge {{ s.verdict }}">{{ VERDICTS[s.verdict] }}</span>{% else %}–{% endif %}</td>
       <td class="{{ s.fwd_20d|tone }}">{{ s.fwd_20d|pct }}</td>
       <td class="{{ s.fwd_60d|tone }}">{{ s.fwd_60d|pct }}</td>
@@ -210,8 +219,8 @@
   </table>
 </details>
 {% else %}
-<p class="muted">상담 후 '안 살래요'를 고른 기록이 아직 없어요. 안 산 것도 기록해 두면 참은 게 잘한 건지 여기서 보여 줘요.</p>
+<p class="muted">상담 후 '안 살래요'·'안 팔래요'를 고른 기록이 아직 없어요. 안 한 것도 기록해 두면 참은 게 잘한 건지 여기서 보여 줘요.</p>
 {% endif %}
 
-<p class="disclaimer">청산된 매수 {{ o.n }}건{% if k.n %} · 보류 {{ k.n }}건{% endif %} 기준 · 내 매매 기록 기반 참고용이며 투자 자문이 아닙니다.</p>
+<p class="disclaimer">청산된 매수 {{ o.n }}건{% if k.n + hd.n %} · 보류 {{ k.n + hd.n }}건{% endif %} 기준 · 내 매매 기록 기반 참고용이며 투자 자문이 아닙니다.</p>
 {% endblock %}

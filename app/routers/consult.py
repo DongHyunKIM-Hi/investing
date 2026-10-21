@@ -11,11 +11,18 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.models import Decision
-from app.services.consult import apply_record, chat, judge, start_consult, visible_messages
+from app.services.consult import (
+    apply_record,
+    chat,
+    held_tickers,
+    judge,
+    start_consult,
+    visible_messages,
+)
 from app.services.engine.backtest import backtest, summarize
 from app.services.engine.case import case_from_decision
 from app.services.engine.verdict import VERDICTS
-from app.services.llm.consult import ConsultError, RecordInput, get_llm
+from app.services.llm.consult import ConsultError, Record, RecordInput, SellRecordInput, get_llm
 from app.services.llm.keywords import suggest_tags
 from app.services.market.prices import PriceService
 from app.services.recompute import track_skipped
@@ -25,6 +32,7 @@ router = APIRouter()
 DB = Annotated[Session, Depends(get_db)]
 TICKER = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
 USER_ACTIONS = {"executed", "skipped", "pending"}
+SIDES = {"buy", "sell"}
 
 
 def _llm():
@@ -49,27 +57,40 @@ def _num(raw: str) -> float | None:
 
 
 @router.get("/consult", response_class=HTMLResponse)
-def consult_home(request: Request, db: DB, ticker: str = "", error: str | None = None):
+def consult_home(
+    request: Request, db: DB, ticker: str = "", side: str = "buy", error: str | None = None
+):
     recent = db.scalars(
         select(Decision).where(Decision.source == "consult").order_by(Decision.id.desc()).limit(20)
     ).all()
     return templates.TemplateResponse(
         request,
         "consult/home.html",
-        {"recent": recent, "ticker": ticker, "error": error, "VERDICTS": VERDICTS},
+        {
+            "recent": recent,
+            "ticker": ticker,
+            "side": side if side in SIDES else "buy",
+            "held": held_tickers(db),
+            "error": error,
+            "VERDICTS": VERDICTS,
+        },
     )
 
 
 @router.post("/consult")
-def consult_start(request: Request, db: DB, ticker: Annotated[str, Form()]):
+def consult_start(
+    request: Request, db: DB, ticker: Annotated[str, Form()], side: Annotated[str, Form()] = "buy"
+):
     symbol = ticker.strip().upper()
+    if side not in SIDES:
+        raise HTTPException(400)
     if not TICKER.match(symbol):
-        return consult_home(request, db, ticker, error="티커 형식이 아닙니다 (예: IONQ)")
+        return consult_home(request, db, ticker, side, error="티커 형식이 아닙니다 (예: IONQ)")
     try:
-        d = start_consult(db, symbol, PriceService(db))
+        d = start_consult(db, symbol, PriceService(db), side)
     except ValueError as e:
         db.rollback()
-        return consult_home(request, db, ticker, error=str(e))
+        return consult_home(request, db, ticker, side, error=str(e))
     db.commit()
     return RedirectResponse(f"/consult/{d.id}", status_code=303)
 
@@ -78,7 +99,7 @@ def consult_start(request: Request, db: DB, ticker: Annotated[str, Form()]):
 def consult_page(request: Request, db: DB, decision_id: int):
     d = _get(db, decision_id)
     if d.verdict is None:
-        suggested, emotion = suggest_tags(d.reason_text or "")
+        suggested, emotion = suggest_tags(d.reason_text or "", d.side)
         return templates.TemplateResponse(
             request,
             "consult/talk.html",
@@ -97,7 +118,7 @@ def consult_page(request: Request, db: DB, decision_id: int):
     matches = [(m, by_id[m["id"]]) for m in detail.get("matches", []) if m["id"] in by_id]
     return templates.TemplateResponse(
         request,
-        "consult/verdict.html",
+        "consult/verdict.html" if d.side == "buy" else "consult/sell_verdict.html",
         {"d": d, "detail": detail, "matches": matches, "VERDICTS": VERDICTS},
     )
 
@@ -130,17 +151,20 @@ def consult_chat(request: Request, db: DB, decision_id: int, message: Annotated[
 @router.post("/consult/{decision_id}/suggest", response_class=HTMLResponse)
 def consult_suggest(
     request: Request,
+    db: DB,
     decision_id: int,
     reason_text: Annotated[str, Form()] = "",
     reasons: Annotated[list[str] | None, Form()] = None,
     emotion: Annotated[str, Form()] = "unknown",
 ):
     """이유를 적고 나면 키워드로 태그를 미리 골라 준다 (API 키 없이 동작). 이미 고른 건 유지."""
-    suggested, suggested_emotion = suggest_tags(reason_text)
+    d = _get(db, decision_id)
+    suggested, suggested_emotion = suggest_tags(reason_text, d.side)
     return templates.TemplateResponse(
         request,
         "consult/_chips.html",
         {
+            "d": d,
             "suggested": [*(reasons or []), *suggested],
             "suggested_emotion": emotion if emotion != "unknown" else suggested_emotion,
         },
@@ -159,24 +183,32 @@ def consult_form(
     target_price: Annotated[str, Form()] = "",
     stop_price: Annotated[str, Form()] = "",
     horizon_days: Annotated[str, Form()] = "",
+    avg_cost: Annotated[str, Form()] = "",
 ):
     d = _get(db, decision_id)
     if d.verdict is not None:
         return RedirectResponse(f"/consult/{d.id}", status_code=303)
+    base = {
+        "reason_tags": reasons or ["unknown"],
+        "emotion": emotion,
+        "conviction": conviction,
+        "reason_summary": reason_text,
+    }
     try:
-        record = RecordInput.model_validate(
-            {
-                "reason_tags": reasons or ["unknown"],
-                "emotion": emotion,
-                "conviction": conviction,
-                "target_price": _num(target_price),
-                "stop_price": _num(stop_price),
-                "horizon_days": int(horizon_days) if horizon_days.strip().isdigit() else None,
-                "reason_summary": reason_text,
-            }
-        )
+        record: Record
+        if d.side == "sell":
+            record = SellRecordInput.model_validate({**base, "avg_cost": _num(avg_cost)})
+        else:
+            record = RecordInput.model_validate(
+                {
+                    **base,
+                    "target_price": _num(target_price),
+                    "stop_price": _num(stop_price),
+                    "horizon_days": int(horizon_days) if horizon_days.strip().isdigit() else None,
+                }
+            )
     except ValidationError as e:
-        suggested, emo = suggest_tags(reason_text)
+        suggested, emo = suggest_tags(reason_text, d.side)
         return templates.TemplateResponse(
             request,
             "consult/talk.html",
@@ -224,10 +256,16 @@ def consult_action(db: DB, decision_id: int, action: Annotated[str, Form()]):
 
 @router.get("/backtest", response_class=HTMLResponse)
 def backtest_page(request: Request, db: DB):
-    decisions = db.scalars(select(Decision).where(Decision.side == "buy")).all()
-    rows = backtest([case_from_decision(d) for d in decisions])
+    decisions = db.scalars(select(Decision)).all()
+    rows = backtest([case_from_decision(d) for d in decisions if d.side == "buy"])
+    sell_rows = backtest([case_from_decision(d) for d in decisions if d.side == "sell"])
     return templates.TemplateResponse(
         request,
         "consult/backtest.html",
-        {"rows": rows, "summary": summarize(rows), "VERDICTS": VERDICTS},
+        {
+            "rows": rows,
+            "summary": summarize(rows),
+            "sell_summary": summarize(sell_rows),
+            "VERDICTS": VERDICTS,
+        },
     )

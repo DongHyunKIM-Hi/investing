@@ -1,10 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
 <hgroup>
+  {% if d.side == "sell" %}
+  <h2>{{ d.ticker }} 매도 상담</h2>
+  <p>팔기 전에 이유를 남기면, 비슷했던 내 과거 매도가 판 뒤 어떻게 됐는지로 판정해 드려요.</p>
+  {% else %}
   <h2>{{ d.ticker }} 매수 상담</h2>
   <p>사기 전에 이유와 계획을 남기면, 비슷했던 내 과거 매매의 결과로 판정해 드려요.</p>
+  {% endif %}
 </hgroup>
 {% include "consult/_situation.html" %}
+{% if d.side == "sell" %}{% include "consult/_position.html" %}{% endif %}
 {% if error %}<p class="flag high">{{ error }}</p>{% endif %}
 
 {% if llm_enabled %}
@@ -14,7 +20,7 @@
   <form hx-post="/consult/{{ d.id }}/chat" hx-target="#chat" hx-swap="outerHTML"
         hx-disabled-elt="find button" hx-indicator="#thinking" hx-on::after-request="if(event.detail.successful) this.reset()">
     <fieldset role="group">
-      <input name="message" placeholder="예: 양자컴퓨터 뉴스 보고 며칠째 오르길래요" autocomplete="off" required>
+      <input name="message" placeholder="{{ '예: 며칠째 빠지는데 더 떨어질까 봐 불안해서요' if d.side == 'sell' else '예: 양자컴퓨터 뉴스 보고 며칠째 오르길래요' }}" autocomplete="off" required>
       <button type="submit">보내기</button>
     </fieldset>
     <small id="thinking" class="htmx-indicator muted">생각 중…</small>
@@ -27,19 +33,26 @@
 <details {% if not llm_enabled %}open{% endif %}>
   <summary>{% if llm_enabled %}대화 대신 직접 입력하기{% else %}직접 입력{% endif %}</summary>
   <form method="post" action="/consult/{{ d.id }}/form">
-    <label>왜 사려고 하세요?
-      <textarea name="reason_text" rows="2" placeholder="예: 양자컴퓨터 뉴스 나오고 5일째 오르는데 지금 안 사면 놓칠 것 같아서"
+    <label>{{ "왜 팔려고 하세요?" if d.side == "sell" else "왜 사려고 하세요?" }}
+      <textarea name="reason_text" rows="2" placeholder="{{ '예: 3일 연속 빠져서 더 떨어지기 전에 정리하고 싶어요' if d.side == 'sell' else '예: 양자컴퓨터 뉴스 나오고 5일째 오르는데 지금 안 사면 놓칠 것 같아서' }}"
         hx-post="/consult/{{ d.id }}/suggest" hx-trigger="change" hx-include="closest form" hx-target="#chips" hx-swap="outerHTML">{{ d.reason_text or "" }}</textarea>
     </label>
     {% include "consult/_chips.html" %}
     <label>확신도 <output id="conv-out">3</output>/5
       <input type="range" name="conviction" min="1" max="5" value="3" oninput="document.getElementById('conv-out').value=this.value">
     </label>
+    {% if d.side == "sell" %}
+    {% if not (d.context or {}).avg_cost %}
+    <label>평균 매수가 ($) <small class="muted">보유 기록이 없어요. 알면 적어 주세요</small>
+      <input name="avg_cost" inputmode="decimal" placeholder="예: 31.5"></label>
+    {% endif %}
+    {% else %}
     <div class="grid">
       <label>목표가 ($)<input name="target_price" inputmode="decimal" placeholder="{% if d.context and d.context.last_close %}현재 {{ '%.2f'|format(d.context.last_close) }}{% endif %}"></label>
       <label>손절가 ($)<input name="stop_price" inputmode="decimal" placeholder="비우면 '손절 계획 없음'"></label>
       <label>보유 기간 (일)<input name="horizon_days" inputmode="numeric" placeholder="예: 30"></label>
     </div>
+    {% endif %}
     <button type="submit">판정 받기</button>
   </form>
 </details>
