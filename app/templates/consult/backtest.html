@@ -2,7 +2,7 @@
 {% block content %}
 <hgroup>
   <h2>판정 엔진 검증</h2>
-  <p>과거 각 매수 시점에, 그 전에 끝난 매매만으로 판정했다면? 실제 결과와 비교합니다.</p>
+  <p>과거 각 매수·매도 시점에, 그 전에 끝난 매매만으로 판정했다면? 실제 결과와 비교합니다.</p>
 </hgroup>
 <p class="muted"><small>엔진이 의미 있으려면 '비추천' 받은 매매의 실제 승률이 '추천'보다 낮아야 해요. 표본이 적을 땐 우연일 수 있어요.</small></p>
 <table>
@@ -15,6 +15,23 @@
     <td>{{ "%.0f%%"|format(s.win_rate * 100) if s.win_rate is not none else "–" }}</td>
     <td class="{{ s.median_return|tone }}">{{ s.median_return|pct }}</td>
     <td class="{{ s.avg_return|tone }}">{{ s.avg_return|pct }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h4>매도 판정 검증</h4>
+<p class="muted"><small>과거 각 매도 시점에, 그 전에 결과가 확정된 매도(판 뒤 20거래일 경과)만으로 판정했다면? '잘 판' 매도 = 판 뒤 20거래일 동안 안 오른 매도예요. '매도 비추천'을 받은 매도의 잘 판 비율이 '매도 추천'보다 낮아야 해요.</small></p>
+<table>
+  <thead><tr><th>판정</th><th>건수</th><th>잘 판 매도</th><th>잘 판 비율</th><th>판 뒤 20일 (중앙값)</th></tr></thead>
+  <tbody>
+  {% for label, s in sell_summary.items() %}
+  {% set post = -s.median_return if s.median_return is not none else none %}
+  <tr>
+    <td><span class="verdict-badge {{ label }}">{{ "매도 " if label in ("recommend", "against") }}{{ VERDICTS[label] }}</span></td>
+    <td>{{ s.n }}</td><td>{{ s.wins }}</td>
+    <td>{{ "%.0f%%"|format(s.win_rate * 100) if s.win_rate is not none else "–" }}</td>
+    <td class="{{ post|tone }}">{{ post|pct }}</td>
   </tr>
   {% endfor %}
   </tbody>

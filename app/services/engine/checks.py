@@ -21,7 +21,7 @@ class Plan:
 
 @dataclass(frozen=True)
 class Flag:
-    level: str  # high | mid
+    level: str  # high | mid | good(매도: 계획대로)
     text: str
 
 
@@ -84,4 +84,84 @@ def check_plan(plan: Plan, ctx: Mapping[str, Any], today: date) -> list[Flag]:
             flags.append(Flag("mid", msg))
 
     flags.sort(key=lambda f: f.level != "high")
+    return flags
+
+
+# ---- 매도 ----
+
+PANIC_DROP_5D = -0.15
+TINY_PROFIT = 0.05
+
+
+@dataclass(frozen=True)
+class SellPlan:
+    tags: frozenset[str]
+    emotion: str | None
+    position_return: float | None  # 팔려는 지금 평가 손익. 보유 기록이 없으면 None
+    held_days: int | None
+    # 이 주식을 살 때 상담에서 남긴 계획 (없으면 None)
+    buy_target: float | None = None
+    buy_stop: float | None = None
+    buy_horizon: int | None = None
+
+
+def check_sell(plan: SellPlan, ctx: Mapping[str, Any]) -> list[Flag]:
+    """매도 점검. level: high(위험) | mid(확인) | good(계획대로 하는 매도)."""
+    flags: list[Flag] = []
+    price = ctx.get("last_close")
+    hit_stop = price is not None and plan.buy_stop is not None and price <= plan.buy_stop
+    hit_target = price is not None and plan.buy_target is not None and price >= plan.buy_target
+
+    if hit_stop:
+        flags.append(
+            Flag(
+                "good",
+                f"살 때 정한 손절가({plan.buy_stop:g}) 아래예요. 계획대로라면 파는 게 맞아요.",
+            )
+        )
+    elif hit_target:
+        flags.append(
+            Flag(
+                "good",
+                f"살 때 정한 목표가({plan.buy_target:g})에 닿았어요. 계획대로 하는 매도예요.",
+            )
+        )
+    elif plan.emotion == "fear" or "fear" in plan.tags:
+        if plan.buy_target is not None or plan.buy_stop is not None:
+            msg = "목표가에도 손절가에도 안 닿았는데 불안해서 파는 거예요. 산 이유가 사라졌나요?"
+            flags.append(Flag("high", msg))
+
+    ret_5d, rsi = ctx.get("ret_5d"), ctx.get("rsi14")
+    if ret_5d is not None and ret_5d <= PANIC_DROP_5D and not hit_stop:
+        msg = f"직전 5일 {ret_5d * 100:+.0f}% 급락 직후예요. 공포에 파는 건 아닌지 한 번 더 보세요."
+        flags.append(Flag("high", msg))
+    if rsi is not None and rsi <= 30 and not hit_stop:
+        flags.append(Flag("mid", f"RSI {rsi:.0f}: 과매도 구간에서 파는 거예요."))
+
+    if "boredom" in plan.tags:
+        flags.append(Flag("mid", "안 움직여서 파는 거라면, 산 이유는 아직 그대로인가요?"))
+    pr = plan.position_return
+    if "take_profit" in plan.tags and pr is not None and 0 <= pr < TINY_PROFIT:
+        flags.append(
+            Flag("mid", f"{pr * 100:+.1f}%에서 익절이에요. 수수료·세금을 빼면 남는 게 적어요.")
+        )
+    if (
+        plan.buy_horizon is not None
+        and plan.held_days is not None
+        and plan.held_days < plan.buy_horizon / 3
+        and not (hit_stop or hit_target)
+    ):
+        msg = (
+            f"산 지 {plan.held_days}일 만이에요. 살 때는 {plan.buy_horizon}일 들고 갈 계획이었어요."
+        )
+        flags.append(Flag("mid", msg))
+    if pr is None:
+        flags.append(
+            Flag(
+                "mid", "보유 기록이 없어 지금 손익을 몰라요. CSV를 가져오거나 평단가를 입력하세요."
+            )
+        )
+
+    order = {"high": 0, "mid": 1, "good": 2}
+    flags.sort(key=lambda f: order[f.level])
     return flags

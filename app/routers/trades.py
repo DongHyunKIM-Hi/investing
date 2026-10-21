@@ -10,11 +10,11 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.models import Decision, Fill
-from app.services.importer.csv_parser import ColumnMapping, parse_fills, read_csv
+from app.services.importer.csv_parser import ColumnMapping, parse_fills, read_table
 from app.services.importer.pipeline import import_fills
 from app.services.importer.presets import guess_mapping
 from app.services.market.prices import PriceService
-from app.services.recompute import recompute_tickers
+from app.services.recompute import recompute_tickers, track_skipped
 from app.taxonomy import EMOTIONS, reasons_for
 from app.web import templates
 
@@ -29,7 +29,7 @@ def _csv_list(raw: str) -> list[str]:
 def _upload_path(token: str):
     if not token.isalnum():  # 경로 조작 방지
         raise HTTPException(400, "잘못된 업로드 토큰")
-    return settings.upload_dir / f"{token}.csv"
+    return settings.upload_dir / f"{token}.upload"  # CSV 또는 xlsx
 
 
 @router.get("", response_class=HTMLResponse)
@@ -54,10 +54,10 @@ def import_form(request: Request):
 async def import_preview(request: Request, file: UploadFile):
     data = await file.read()
     try:
-        df = read_csv(data)
+        df = read_table(data)
     except Exception as e:
         return templates.TemplateResponse(
-            request, "trades/import.html", {"error": f"CSV를 읽지 못했습니다: {e}"}
+            request, "trades/import.html", {"error": f"파일을 읽지 못했습니다: {e}"}
         )
     token = secrets.token_hex(16)
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
@@ -107,7 +107,7 @@ def import_commit(
         sell_values=_csv_list(sell_values),
         fee_columns=fee_columns or [],
     )
-    df = read_csv(path.read_bytes())
+    df = read_table(path.read_bytes())
     try:
         parsed = parse_fills(df, mapping)
     except ValueError as e:
@@ -138,7 +138,9 @@ def import_commit(
 @router.post("/recompute", response_class=HTMLResponse)
 def recompute_all(request: Request, db: DB):
     tickers = db.scalars(select(Fill.ticker).distinct()).all()
-    warnings = recompute_tickers(db, tickers, PriceService(db))
+    prices = PriceService(db)
+    warnings = recompute_tickers(db, tickers, prices)
+    warnings += track_skipped(db, prices)
     db.commit()
     return templates.TemplateResponse(
         request, "trades/_recompute_done.html", {"count": len(tickers), "warnings": warnings}

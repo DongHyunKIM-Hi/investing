@@ -8,7 +8,7 @@ from typing import Any
 
 from app.services.engine.case import Case
 from app.services.engine.similarity import Match
-from app.taxonomy import BUY_REASONS, EMOTIONS
+from app.taxonomy import BUY_REASONS, EMOTIONS, SELL_REASONS
 
 # Beta(2, 2) 사전분포: 표본이 적으면 승률을 50% 쪽으로 당긴다
 PRIOR = 2.0
@@ -57,7 +57,7 @@ def _mean(values: Iterable[float | None]) -> float | None:
     return sum(vals) / len(vals) if vals else None
 
 
-def _median(values: Iterable[float | None]) -> float | None:
+def median(values: Iterable[float | None]) -> float | None:
     vals = [v for v in values if v is not None]
     return statistics.median(vals) if vals else None
 
@@ -75,7 +75,7 @@ def stats(cases: Sequence[Case]) -> Stats:
         wins=wins,
         win_rate=wins / len(cases) if cases else None,
         avg_return=_mean(c.ret for c in cases),
-        median_return=_median(c.ret for c in cases),
+        median_return=median(c.ret for c in cases),
     )
 
 
@@ -149,45 +149,79 @@ SITUATIONS: dict[str, tuple[str, Callable[[Ctx], bool]]] = {
 
 @dataclass(frozen=True)
 class Pattern:
-    kind: str  # tag | emotion | situation | ticker
+    kind: str  # tag | emotion | situation | position | ticker | plan
     key: str
     label: str
     stats: Stats
+    side: str = "buy"  # sell이면 wins = 잘 판 매도(판 뒤 안 오름)
 
     @property
     def sentence(self) -> str:
         s = self.stats
+        verb = "산" if self.side == "buy" else "판"
+        subject = {
+            "tag": f"'{self.label}' 이유로 {verb}",
+            "emotion": f"'{self.label}' 상태로 {verb}",
+            "situation": f"{self.label} {verb}",
+            "position": f"{self.label} {verb}",
+            "ticker": f"{self.label}을(를) {verb}",
+            "plan": self.label,
+        }[self.kind]
+        if self.side == "sell":
+            # 매도의 ret은 -(판 뒤 20일 수익률)이므로 부호를 되돌려 보여 준다
+            post = ""
+            if s.median_return is not None:
+                post = f", 판 뒤 20일 중앙값 {-s.median_return * 100:+.1f}%"
+            return f"{subject} 매도 {s.n}건 중 {s.n - s.wins}건은 판 뒤 더 올랐어요{post}"
         avg = ""
         if s.median_return is not None and s.avg_return is not None:
             avg = f", 중앙값 {s.median_return * 100:+.1f}% (평균 {s.avg_return * 100:+.1f}%)"
-        subject = {
-            "tag": f"'{self.label}' 이유로 산",
-            "emotion": f"'{self.label}' 상태로 산",
-            "situation": f"{self.label} 산",
-            "ticker": f"{self.label}을(를) 산",
-        }[self.kind]
         return f"{subject} 매매 {s.n}건 중 {s.wins}건 수익{avg}"
 
     def to_dict(self) -> dict[str, Any]:
         return {**asdict(self), "sentence": self.sentence}
 
 
+# 매도만: 팔 때 포지션 손익 구간
+POSITIONS: dict[str, tuple[str, Callable[[Ctx], bool]]] = {
+    "in_loss": (
+        "손실 중에",
+        lambda c: c.get("position_return") is not None and c["position_return"] < 0,
+    ),
+    "small_gain": (
+        "수익 0~20% 구간에서",
+        lambda c: c.get("position_return") is not None and 0 <= c["position_return"] < 0.2,
+    ),
+    "big_gain": ("+20% 넘게 수익 중에", _ge("position_return", 0.2)),
+}
+
+
 def patterns(query: Case, history: Iterable[Case], min_n: int = 2) -> list[Pattern]:
-    past = [c for c in history if c.id != query.id and c.resolved_before(query.decided_on)]
+    """query와 같은 쪽(매수/매도) 과거 결정 중 같은 조건을 가진 것들의 성적."""
+    past = [
+        c
+        for c in history
+        if c.id != query.id and c.side == query.side and c.resolved_before(query.decided_on)
+    ]
+    reasons = BUY_REASONS if query.side == "buy" else SELL_REASONS
     found: list[Pattern] = []
 
     def add(kind: str, key: str, label: str, members: list[Case]) -> None:
         if len(members) >= min_n:
-            found.append(Pattern(kind, key, label, stats(members)))
+            found.append(Pattern(kind, key, label, stats(members), query.side))
 
     for tag in sorted(query.tags):
-        add("tag", tag, BUY_REASONS.get(tag, tag), [c for c in past if tag in c.tags])
+        add("tag", tag, reasons.get(tag, tag), [c for c in past if tag in c.tags])
     if query.emotion:
         label = EMOTIONS.get(query.emotion, query.emotion)
         add("emotion", query.emotion, label, [c for c in past if c.emotion == query.emotion])
     for key, (label, test) in SITUATIONS.items():
         if test(query.context):
             add("situation", key, label, [c for c in past if test(c.context)])
+    if query.side == "sell":
+        for key, (label, test) in POSITIONS.items():
+            if test(query.context):
+                add("position", key, label, [c for c in past if test(c.context)])
     add("ticker", query.ticker, query.ticker, [c for c in past if c.ticker == query.ticker])
 
     # 승률이 극단적인(나쁜 쪽 먼저) 패턴이 위로

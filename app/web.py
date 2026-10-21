@@ -2,7 +2,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Undefined
 
 from app.config import ROOT_DIR
-from app.taxonomy import BUY_REASONS, EMOTIONS, SELL_REASONS
+from app.taxonomy import BUY_REASONS, EMOTIONS, SELL_REASONS, reasons_for
 
 
 def _missing(value: object) -> bool:
@@ -23,4 +23,6 @@ def tone(value: float | None) -> str:
 templates = Jinja2Templates(directory=ROOT_DIR / "app" / "templates")
 templates.env.filters["pct"] = pct
 templates.env.filters["tone"] = tone
-templates.env.globals.update(BUY_REASONS=BUY_REASONS, SELL_REASONS=SELL_REASONS, EMOTIONS=EMOTIONS)
+templates.env.globals.update(
+    BUY_REASONS=BUY_REASONS, SELL_REASONS=SELL_REASONS, EMOTIONS=EMOTIONS, reasons_for=reasons_for
+)

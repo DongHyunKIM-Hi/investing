@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}껄껄껄 리포트 · 껄무새 탈출{% endblock %}
+
+{% macro rate(wins, n) -%}
+  {%- if n -%}{{ "%.0f%%"|format(wins / n * 100) }} <small class="muted">({{ wins }}/{{ n }})</small>{%- else -%}–{%- endif -%}
+{%- endmacro %}
+
+{% macro group_table(title, groups, empty, note="") %}
+<h4>{{ title }}</h4>
+{% if note %}<p class="muted"><small>{{ note }}</small></p>{% endif %}
+{% if groups %}
+<div class="overflow-auto">
+<table class="striped report-table">
+  <thead><tr><th>구분</th><th>건수</th><th>승률</th><th>중앙값 수익률</th><th>평균 수익률</th></tr></thead>
+  <tbody>
+  {% for p in groups %}
+  {% set s = p.stats %}
+  <tr class="{{ 'few' if s.n < MIN_SAMPLES }}">
+    <td>{% if p.kind == "ticker" %}<strong>{{ p.label }}</strong>{% else %}{{ p.label }}{% endif %}{% if s.n < MIN_SAMPLES %} <small class="muted">표본 적음</small>{% endif %}</td>
+    <td>{{ s.n }}</td>
+    <td>
+      <span class="bar"><span style="width: {{ (s.win_rate or 0) * 100 }}%"></span></span>
+      {{ rate(s.wins, s.n) }}
+    </td>
+    <td class="{{ s.median_return|tone }}">{{ s.median_return|pct }}</td>
+    <td class="{{ s.avg_return|tone }}">{{ s.avg_return|pct }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">{{ empty }}</p>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+{% set o = r.overall %}
+<hgroup>
+  <h2>껄껄껄 리포트</h2>
+  <p>"그때 살걸, 팔걸"을 반복하게 만든 내 습관을 지난 매매 전체에서 찾아요.</p>
+</hgroup>
+
+{% if o.n == 0 %}
+<article>
+  <p>아직 청산된 매수가 없어요. 매수와 매도가 모두 들어 있는 CSV를 가져오면 리포트가 만들어져요.</p>
+  <a href="/trades/import" role="button">CSV 가져오기</a>
+  {% if r.open_count %}<p class="muted"><small>보유 중인 매수 {{ r.open_count }}건은 청산되면 집계돼요.</small></p>{% endif %}
+</article>
+{% else %}
+
+<article>
+  <div class="metrics">
+    <div><small>청산된 매수</small><strong>{{ o.n }}건</strong></div>
+    <div><small>승률</small><strong>{{ rate(o.wins, o.n) }}</strong></div>
+    <div><small>중앙값 수익률</small><strong class="{{ o.median_return|tone }}">{{ o.median_return|pct }}</strong></div>
+    <div><small>평균 수익률</small><strong class="{{ o.avg_return|tone }}">{{ o.avg_return|pct }}</strong></div>
+    <div><small>SPY 대비 (중앙값)</small><strong class="{{ r.median_excess|tone }}">{{ r.median_excess|pct }}</strong></div>
+    <div><small>보유 중</small><strong>{{ r.open_count }}건</strong></div>
+  </div>
+  {% if r.tagged < o.n %}
+  <p class="muted" style="margin:.8rem 0 0"><small>
+    청산된 매수 {{ o.n }}건 중 {{ r.tagged }}건만 이유가 기록돼 있어요.
+    <a href="/trades/tagging">나머지 이유를 채우면</a> 이유별 분석이 정확해져요.
+  </small></p>
+  {% endif %}
+</article>
+
+<h3>반복되는 실수 Top {{ r.mistakes|length if r.mistakes else 3 }}</h3>
+{% if r.mistakes %}
+<ol class="mistakes">
+  {% for p in r.mistakes %}
+  <li>
+    <strong>{{ p.sentence }}</strong>
+    <br><small class="muted">승률 {{ "%.0f%%"|format(p.stats.win_rate * 100) }} · 표본 {{ p.stats.n }}건</small>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="muted">표본 {{ MIN_SAMPLES }}건 이상에서 승률이 반도 안 되고 보통 손실로 끝난 패턴은 아직 없어요.</p>
+{% endif %}
+
+<h3>매도 습관</h3>
+<div class="grid">
+  <article>
+    {% set e = r.early_exits %}
+    <header><strong>너무 일찍 판 비율</strong></header>
+    {% if e.n %}
+    <p class="verdict-prob"><strong>{{ "%.0f%%"|format(e.rate * 100) }}</strong> <small class="muted">({{ e.early }}/{{ e.n }}건)</small></p>
+    <p><small>판 뒤 20거래일 동안 {{ "%.0f"|format(EARLY_EXIT * 100) }}% 넘게 더 오른 매매예요.
+      반대로 {{ "%.0f"|format(EARLY_EXIT * 100) }}% 넘게 더 떨어져 잘 판 매매는 {{ e.good }}건이에요.
+      판 뒤 20일 수익률 중앙값은 <span class="{{ e.median_post|tone }}">{{ e.median_post|pct }}</span>.</small></p>
+    {% else %}
+    <p class="muted">판 뒤 20거래일이 지난 매매가 아직 없어요.</p>
+    {% endif %}
+  </article>
+  <article>
+    {% set h = r.holding %}
+    <header><strong>손실은 버티고 수익은 빨리 팔기</strong></header>
+    {% if h.wins and h.losses %}
+    <p>수익 낸 매매는 보통 <strong>{{ "%.0f"|format(h.win_days) }}일</strong>,
+       손실 난 매매는 <strong>{{ "%.0f"|format(h.loss_days) }}일</strong> 들고 있었어요.</p>
+    {% if h.holds_losers %}
+    <p class="flag high">손실 매매를 훨씬 오래 들고 있어요. 손절가를 정하고 지키는 게 먼저예요.</p>
+    {% else %}
+    <p><small class="muted">수익 {{ h.wins }}건 · 손실 {{ h.losses }}건 기준{% if h.wins < MIN_SAMPLES or h.losses < MIN_SAMPLES %}. 표본이 적어 아직 판단하기 일러요{% endif %}.</small></p>
+    {% endif %}
+    {% else %}
+    <p class="muted">수익 매매와 손실 매매가 모두 있어야 비교할 수 있어요.</p>
+    {% endif %}
+  </article>
+</div>
+
+{% if r.early_exits.worst %}
+<h4>판 뒤 더 오른 매매</h4>
+<div class="overflow-auto">
+<table class="striped">
+  <thead><tr><th>종목</th><th>산 날</th><th>판 날</th><th>보유일</th><th>내 수익률</th><th>판 뒤 20일</th></tr></thead>
+  <tbody>
+  {% for c in r.early_exits.worst %}
+  <tr>
+    <td><strong>{{ c.ticker }}</strong></td>
+    <td>{{ c.decided_on }}</td>
+    <td>{{ c.closed_on }}</td>
+    <td>{{ c.holding_days if c.holding_days is not none else "–" }}</td>
+    <td class="{{ c.ret|tone }}">{{ c.ret|pct }}</td>
+    <td class="{{ c.post_exit_20d|tone }}">{{ c.post_exit_20d|pct }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h3>무엇이 통했고 무엇이 안 통했나</h3>
+<p class="muted"><small>승률이 낮은 순서예요. 표본이 {{ MIN_SAMPLES }}건 미만인 줄은 우연일 수 있어요. 수익률 기준은 중앙값이에요 (대박 한 건이 평균을 끌어올리기 때문).</small></p>
+{{ group_table("매수 이유별", r.by_tag, "이유가 기록된 청산 매수가 없어요.") }}
+{{ group_table("감정별", r.by_emotion, "감정이 기록된 청산 매수가 없어요.") }}
+{{ group_table("매수 당시 상황별", r.by_situation, "급등 직후·과열·폭락 같은 특정 상황에서 산 매매가 없어요.") }}
+{{ group_table("계획 준수", r.by_plan, "상담으로 계획을 기록하고 실제로 체결된 매수가 아직 없어요.",
+   note="상담에서 손절가·보유 기간을 기록한 매수만 셉니다. 손절가 아래로 3% 넘게 내려가도 들고 있었거나, 계획한 기간의 2배를 넘겨 들고 있었으면 '어김'이에요.") }}
+{{ group_table("종목별 (2건 이상)", r.by_ticker, "같은 종목을 두 번 이상 사고판 기록이 없어요.") }}
+
+<h3>매도 이유별: 판 뒤 어떻게 됐나</h3>
+{% if r.sells %}
+<div class="overflow-auto">
+<table class="striped report-table">
+  <thead><tr><th>매도 이유</th><th>건수</th><th>판 뒤 더 오름</th><th>판 뒤 더 떨어짐</th><th>판 뒤 20일 중앙값</th></tr></thead>
+  <tbody>
+  {% for g in r.sells %}
+  <tr class="{{ 'few' if g.n < MIN_SAMPLES }}">
+    <td>{{ g.label }}{% if g.n < MIN_SAMPLES %} <small class="muted">표본 적음</small>{% endif %}</td>
+    <td>{{ g.n }}</td>
+    <td>{{ rate(g.rebounds, g.n) }}</td>
+    <td>{{ rate(g.drops, g.n) }}</td>
+    <td class="{{ g.median_post|tone }}">{{ g.median_post|pct }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted"><small>'더 오름/떨어짐'은 판 뒤 20거래일 동안 {{ "%.0f"|format(EARLY_EXIT * 100) }}% 넘게 움직인 경우예요. 그 시점엔 몰랐던 정보이니 결과론으로만 보세요.</small></p>
+{% else %}
+<p class="muted">매도 이유가 기록되고 판 뒤 20거래일이 지난 매도가 없어요. <a href="/trades/tagging">이유 태깅</a>에서 매도 이유도 채울 수 있어요.</p>
+{% endif %}
+
+{% endif %}
+
+{% set k = r.skips %}
+{% set hd = r.holds %}
+<h3>안 산 것·안 판 것: 참은 게 잘한 건지</h3>
+{% if k.n or k.tracking or hd.n or hd.tracking %}
+<p class="muted"><small>상담 후 '안 살래요'·'안 팔래요'를 고른 결정을 그날 종가와 20거래일 뒤를 비교해요.
+  {{ "%.0f"|format(EARLY_EXIT * 100) }}% 넘게 반대로 움직였으면 '껄'이에요.</small></p>
+{% for title, g0, groups, good_label, prefix in [
+     ("안 산 것", k, r.skips_by_verdict, "잘 참음 (그 뒤 하락)", "매수 "),
+     ("안 판 것", hd, r.holds_by_verdict, "잘 버팀 (그 뒤 상승)", "매도 ")] %}
+{% if g0.n or g0.tracking %}
+<h4>{{ title }}</h4>
+{% if g0.n %}
+<div class="overflow-auto">
+<table class="striped report-table">
+  <thead><tr><th>상담 판정</th><th>건수</th><th>{{ good_label }}</th><th>껄</th><th>20일 뒤 주가 (중앙값)</th></tr></thead>
+  <tbody>
+  {% for g in [g0] + groups %}
+  <tr class="{{ 'few' if g.n < MIN_SAMPLES and g.key != 'all' }}">
+    <td>{% if g.key == "all" %}<strong>전체</strong>{% else %}<span class="verdict-badge {{ g.key }}">{{ prefix if g.key in ("recommend", "against") }}{{ g.label }}</span>{% endif %}
+      {% if g.tracking %} <small class="muted">+ 추적 중 {{ g.tracking }}건</small>{% endif %}</td>
+    <td>{{ g.n }}</td>
+    <td>{{ rate(g.good, g.n) }}</td>
+    <td>{{ rate(g.missed, g.n) }}</td>
+    <td class="{{ g.median_20d|tone }}">{{ g.median_20d|pct }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">{{ g0.tracking }}건 모두 아직 20거래일이 안 지났어요.</p>
+{% endif %}
+{% endif %}
+{% endfor %}
+<details>
+  <summary>최근 보류한 결정</summary>
+  <table class="striped">
+    <thead><tr><th>날짜</th><th>종목</th><th>구분</th><th>판정</th><th>20일 뒤</th><th>60일 뒤</th></tr></thead>
+    <tbody>
+    {% for s in r.recent_skips %}
+    <tr>
+      <td>{{ s.decided_on }}</td>
+      <td><a href="/consult/{{ s.id }}"><strong>{{ s.ticker }}</strong></a></td>
+      <td>{{ "안 삼" if s.side == "buy" else "안 팖" }}</td>
+      <td>{% if s.verdict %}<span class="verdict-badge {{ s.verdict }}">{{ VERDICTS[s.verdict] }}</span>{% else %}–{% endif %}</td>
+      <td class="{{ s.fwd_20d|tone }}">{{ s.fwd_20d|pct }}</td>
+      <td class="{{ s.fwd_60d|tone }}">{{ s.fwd_60d|pct }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% else %}
+<p class="muted">상담 후 '안 살래요'·'안 팔래요'를 고른 기록이 아직 없어요. 안 한 것도 기록해 두면 참은 게 잘한 건지 여기서 보여 줘요.</p>
+{% endif %}
+
+<p class="disclaimer">청산된 매수 {{ o.n }}건{% if k.n + hd.n %} · 보류 {{ k.n + hd.n }}건{% endif %} 기준 · 내 매매 기록 기반 참고용이며 투자 자문이 아닙니다.</p>
+{% endblock %}

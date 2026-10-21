@@ -15,6 +15,10 @@ class MarketDataProvider(Protocol):
         """다음 실적발표 예정일. 모르면 None (상담 시점 경고용, 과거 매매에는 쓰지 않는다)."""
         ...
 
+    def splits(self, ticker: str) -> list[tuple[date, float]]:
+        """주식 분할 이력 (분할일, 비율). 2:1 분할 = 2.0."""
+        ...
+
 
 log = logging.getLogger(__name__)
 
@@ -42,3 +46,8 @@ class YahooProvider:
             return None
         upcoming = sorted(d for d in dates if isinstance(d, date) and d >= date.today())
         return upcoming[0] if upcoming else None
+
+    def splits(self, ticker: str) -> list[tuple[date, float]]:
+        raw = yf.Ticker(ticker).splits
+        days = [ts.date() for ts in pd.DatetimeIndex(raw.index)]
+        return [(d, float(r)) for d, r in zip(days, raw.to_numpy(), strict=True) if float(r) > 0]

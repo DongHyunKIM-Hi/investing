@@ -1,5 +1,6 @@
-"""증권사 체결내역 CSV → 정규화된 체결 목록."""
+"""증권사 체결내역 파일(CSV·엑셀) → 정규화된 체결 목록."""
 
+import csv
 import hashlib
 import io
 import re
@@ -46,16 +47,69 @@ class ParseResult:
     skipped: list[tuple[int, str]]  # (CSV 행 번호, 사유)
 
 
-def read_csv(data: bytes) -> pd.DataFrame:
-    """국내 증권사 CSV는 cp949가 흔하므로 인코딩을 순서대로 시도한다."""
+XLSX_MAGIC = b"PK\x03\x04"  # .xlsx는 zip 파일
+HEADER_SCAN_ROWS = 15
+# 헤더 줄을 알아보는 단어. 증권사 파일은 위에 '해외주식 거래내역' 같은 제목 줄이 붙곤 한다
+HEADER_HINTS = (
+    "일자",
+    "일",
+    "date",
+    "종목",
+    "티커",
+    "ticker",
+    "symbol",
+    "구분",
+    "side",
+    "type",
+    "단가",
+    "가격",
+    "price",
+    "수량",
+    "quantity",
+    "qty",
+)
+MIN_HEADER_HITS = 3
+
+
+def _header_row(rows: list[list[str]]) -> int:
+    """제목 줄을 건너뛰고 컬럼 이름이 있는 첫 줄의 위치. 못 찾으면 0."""
+    for i, cells in enumerate(rows[:HEADER_SCAN_ROWS]):
+        names = [c.strip().lower() for c in cells if c and c.strip()]
+        hits = sum(1 for c in names if any(h in c for h in HEADER_HINTS))
+        if hits >= MIN_HEADER_HITS:
+            return i
+    return 0
+
+
+def _clean(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.fillna("").astype(str)
+    df.columns = [str(c).strip() for c in df.columns]
+    # 엑셀 합계 줄·빈 줄처럼 값이 하나도 없는 행은 버린다
+    return df[(df.apply(lambda col: col.str.strip()) != "").any(axis=1)].reset_index(drop=True)
+
+
+def read_table(data: bytes) -> pd.DataFrame:
+    """체결내역 파일(CSV 또는 .xlsx) → 모든 값이 문자열인 표.
+
+    국내 증권사 CSV는 cp949가 흔하므로 인코딩을 순서대로 시도한다.
+    """
+    if data.startswith(XLSX_MAGIC):
+        raw = pd.read_excel(io.BytesIO(data), header=None, dtype=str).fillna("")
+        i = _header_row(raw.astype(str).values.tolist())
+        df = raw.iloc[i + 1 :]
+        df.columns = list(raw.iloc[i])
+        return _clean(df)
     for enc in ENCODINGS:
         try:
-            df = pd.read_csv(io.BytesIO(data), encoding=enc, dtype=str, keep_default_na=False)
+            text = data.decode(enc)
         except UnicodeDecodeError:
             continue
-        df.columns = [str(c).strip() for c in df.columns]
-        return df
-    raise ValueError("CSV 인코딩을 인식하지 못했습니다 (UTF-8 / CP949 지원)")
+        # 제목 줄은 칸 수가 달라 pandas가 못 읽으므로, 헤더 줄 위치를 먼저 찾는다
+        lines = text.splitlines()[:HEADER_SCAN_ROWS]
+        skip = _header_row(list(csv.reader(lines)))
+        df = pd.read_csv(io.StringIO(text), skiprows=skip, dtype=str, keep_default_na=False)
+        return _clean(df)
+    raise ValueError("파일 인코딩을 인식하지 못했습니다 (UTF-8 / CP949 CSV 또는 .xlsx 지원)")
 
 
 def to_decimal(raw: str) -> Decimal | None:
