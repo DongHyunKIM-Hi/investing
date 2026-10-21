@@ -19,7 +19,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 ## 구조
 - `app/models.py` — Decision(결정: 이유·감정·context·outcome·판정), ConsultMessage(상담 대화), Fill(체결), LotMatch(FIFO 매칭), PriceBar/PriceCoverage(시세 캐시)
 - `app/taxonomy.py` — 이유·감정 고정 어휘. **key는 유사도 매칭 기준이므로 바꾸지 말 것** (label만 수정 가능)
-- `app/services/importer/` — `csv_parser`(CSV→ParsedFill), `presets`(증권사별 매핑·헤더 추측), `fifo`, `pipeline`(DB 저장, 같은 날·종목·방향 체결을 Decision 하나로 묶음)
+- `app/services/importer/` — `csv_parser`(CSV·xlsx→ParsedFill, 위쪽 제목 줄 자동 건너뜀), `presets`(증권사별 매핑·헤더 추측), `fifo`, `pipeline`(DB 저장, 같은 날·종목·방향 체결을 Decision 하나로 묶음)
 - `app/services/market/` — `provider`(yfinance), `prices`(DB 캐시), `snapshot`(결정 시점 지표)
 - `app/services/outcomes.py` — 결과 지표·계획 준수 여부 (순수 함수)
 - `app/services/report.py` — 껄껄껄 리포트: 이유·감정·상황·계획·종목별 성적, 반복 실수 Top 3, 너무 일찍 판 비율 (순수 함수)
@@ -53,7 +53,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 ## 알려진 한계
 - 보유 중 주식 분할이 있으면 FIFO 수량이 어긋남 (CSV 수량은 분할 전 기준)
 - 실적발표일 지표 미구현 (yfinance 과거 실적일 신뢰도 낮음)
-- 증권사 프리셋은 `generic`만 있음 — 실제 CSV를 받으면 `presets.py`에 추가
+- 증권사 프리셋은 `generic`만 있음 — 토스증권 내보내기 형식은 공개 자료로 확인 못 함. 실제 파일을 받으면 `presets.py`에 추가 (그 전까지는 헤더 추측 + 컬럼 맞추기 화면으로 가져옴)
 - 대화형 상담은 가짜 LLM으로만 흐름 검증됨 (실제 API 키로 프롬프트 품질 미검증)
 - 유사도 가중치·척도(`similarity.py` 상수)와 판정 임계값(`verdict.py`)은 직관값 — 데이터가 쌓이면 백테스트로 조정
 - 매도 판정 기준(판 뒤 20일 안 오르면 잘 판 것)과 매도 점검 임계값(5일 -15% 급락, 익절 +5% 미만)은 직관값. 데모 데이터 백테스트에서는 매도 추천/비추천이 거꾸로 나옴(표본 5·3건, 매도 이유 미태깅) — 실제 데이터로 `/backtest` 확인 필요

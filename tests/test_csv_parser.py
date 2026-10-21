@@ -3,7 +3,7 @@ from decimal import Decimal as D
 
 import pytest
 
-from app.services.importer.csv_parser import ColumnMapping, extract_ticker, parse_fills, read_csv
+from app.services.importer.csv_parser import ColumnMapping, extract_ticker, parse_fills, read_table
 from app.services.importer.presets import PRESETS, guess_mapping, guess_preset
 
 GENERIC = PRESETS["generic"][1]
@@ -27,7 +27,7 @@ KOREAN_MAPPING = ColumnMapping(
 
 
 def test_korean_cp949_descending_file():
-    df = read_csv(KOREAN_CSV.encode("cp949"))
+    df = read_table(KOREAN_CSV.encode("cp949"))
     result = parse_fills(df, KOREAN_MAPPING)
 
     assert [(p.ticker, p.side, p.trade_date) for p in result.fills] == [
@@ -44,8 +44,8 @@ def test_korean_cp949_descending_file():
 def test_identical_rows_get_distinct_keys_and_reimport_is_stable():
     row = "2026-01-02,AAPL,buy,100,1,0\n"
     csv = "date,ticker,side,price,quantity,fee\n" + row * 2
-    first = parse_fills(read_csv(csv.encode()), GENERIC)
-    again = parse_fills(read_csv(csv.encode()), GENERIC)
+    first = parse_fills(read_table(csv.encode()), GENERIC)
+    again = parse_fills(read_table(csv.encode()), GENERIC)
     keys = [p.dedup_key for p in first.fills]
     assert len(set(keys)) == 2
     assert keys == [p.dedup_key for p in again.fills]
@@ -53,7 +53,7 @@ def test_identical_rows_get_distinct_keys_and_reimport_is_stable():
 
 def test_missing_column_raises():
     with pytest.raises(ValueError, match="price"):
-        parse_fills(read_csv(b"date,ticker,side,quantity,fee\n"), GENERIC)
+        parse_fills(read_table(b"date,ticker,side,quantity,fee\n"), GENERIC)
 
 
 @pytest.mark.parametrize(
@@ -88,3 +88,32 @@ def test_guess_mapping_from_korean_headers():
         "체결수량",
     )
     assert m.fee_columns == ["수수료", "제세금"]
+
+
+def test_title_rows_above_header_are_skipped():
+    titled = "해외주식 거래내역\n조회기간 2026.03.01 ~ 2026.03.31\n\n" + KOREAN_CSV
+    df = read_table(titled.encode("cp949"))
+    assert list(df.columns)[:3] == ["거래일자", "종목명", "구분"]
+    assert len(parse_fills(df, KOREAN_MAPPING).fills) == 3
+
+
+def test_xlsx_with_title_row():
+    import io
+
+    import pandas as pd
+
+    rows = [
+        ["해외주식 거래내역", None, None, None, None, None, None],
+        ["거래일자", "종목명", "구분", "체결단가", "체결수량", "수수료", "제세금"],
+        ["2026.03.05", "테슬라(TSLA)", "해외주식매도", 1020.5, 2, 1.02, 0.05],
+        ["2026.03.03", "테슬라(TSLA)", "해외주식매수", 1000, 2, 1.0, None],
+        [None] * 7,
+    ]
+    buf = io.BytesIO()
+    pd.DataFrame(rows).to_excel(buf, header=False, index=False)
+    df = read_table(buf.getvalue())
+    assert guess_mapping(list(df.columns)) is not None
+    result = parse_fills(df, KOREAN_MAPPING)
+    assert [(f.side, f.price) for f in result.fills] == [("buy", D("1000")), ("sell", D("1020.5"))]
+    assert result.fills[1].fee == D("1.07")
+    assert result.skipped == []
