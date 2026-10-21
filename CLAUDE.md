@@ -38,6 +38,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - 모델 변경 시 `uv run alembic revision --autogenerate -m "..."` 후 생성된 파일 검토
 - 등락 색상은 국내 관례: 상승 빨강(`.up`), 하락 파랑(`.down`)
 - 금액은 `Decimal`(DB `Numeric`), 분석은 pandas float
+- 체결(Fill)은 CSV 원본 그대로 저장, 분할 보정은 계산할 때만 (`split_factor`)
 - 판정 화면에는 표본 수와 "투자 자문 아님"을 항상 표시
 - 유사 전적·패턴은 **판정 시점 이전에 청산된** 매매만 사용 (`Case.resolved_before`)
 - 판정 기준 수익률은 평균이 아닌 중앙값 (테마주 대박 한 건이 평균을 왜곡)
@@ -51,7 +52,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - [x] 4단계: 매도 상담 + 보류 건 추적 + 껄껄껄 리포트 (`/report`)
 
 ## 알려진 한계
-- 보유 중 주식 분할이 있으면 FIFO 수량이 어긋남 (CSV 수량은 분할 전 기준)
+- 주식 분할은 계산 시 체결을 지금 기준으로 보정함(`importer/splits.py`, 분할 이력은 `price_coverage.splits`에 캐시). 단 상담에서 남긴 목표가·손절가는 보정하지 않으므로 상담 후 분할되면 어긋남
 - 실적발표일 지표 미구현 (yfinance 과거 실적일 신뢰도 낮음)
 - 증권사 프리셋은 `generic`만 있음 — 토스증권 내보내기 형식은 공개 자료로 확인 못 함. 실제 파일을 받으면 `presets.py`에 추가 (그 전까지는 헤더 추측 + 컬럼 맞추기 화면으로 가져옴)
 - 대화형 상담은 가짜 LLM으로만 흐름 검증됨 (실제 API 키로 프롬프트 품질 미검증)

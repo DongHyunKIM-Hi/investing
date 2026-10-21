@@ -3,6 +3,7 @@
 매도 상담은 시작할 때 지금 보유 중인 lot(평단가·평가 손익)과 살 때 남긴 계획을 context에 담는다.
 """
 
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -16,6 +17,7 @@ from app.services.engine.case import case_from_decision
 from app.services.engine.checks import Plan, SellPlan, check_plan, check_sell
 from app.services.engine.similarity import find_similar
 from app.services.engine.verdict import decide, patterns
+from app.services.importer.splits import Split, split_factor
 from app.services.llm.consult import (
     ConsultError,
     ConsultLLM,
@@ -48,7 +50,7 @@ def start_consult(db: Session, ticker: str, prices: PriceService, side: str = "b
         ctx["next_earnings"] = earnings.isoformat()
 
     if side == "sell":
-        ctx.update(_holding(db, ticker, ctx.get("last_close"), today))
+        ctx.update(_holding(db, ticker, ctx.get("last_close"), today, prices.splits(ticker)))
 
     decision = Decision(
         ticker=ticker,
@@ -65,12 +67,21 @@ def start_consult(db: Session, ticker: str, prices: PriceService, side: str = "b
     return decision
 
 
-def _holding(db: Session, ticker: str, last_close: float | None, today: date) -> dict[str, Any]:
+def _priced(fills: Iterable[Fill], splits: Sequence[Split]) -> list[PricedFill]:
+    """분할 보정한 체결 (지금 기준 수량·가격)."""
+    out = []
+    for f in fills:
+        k = split_factor(f.trade_date, splits)
+        out.append(PricedFill(f.id, f.side, f.trade_date, f.seq, f.price / k, f.quantity * k))
+    return out
+
+
+def _holding(
+    db: Session, ticker: str, last_close: float | None, today: date, splits: Sequence[Split]
+) -> dict[str, Any]:
     """지금 보유 중인 lot 요약 + 그 lot을 살 때 상담에서 남긴 계획 (가장 최근 것)."""
     fills = db.scalars(select(Fill).where(Fill.ticker == ticker)).all()
-    lots = open_lots(
-        PricedFill(f.id, f.side, f.trade_date, f.seq, f.price, f.quantity) for f in fills
-    )
+    lots = open_lots(_priced(fills, splits))
     pos = summarize_position(lots, last_close, today)
     if pos is None:
         return {}
@@ -217,14 +228,15 @@ def visible_messages(d: Decision) -> list[dict[str, str]]:
 def held_tickers(db: Session) -> list[tuple[str, float]]:
     """지금 보유 중인 종목과 수량 (CSV 체결 기준)."""
     fills = db.scalars(select(Fill)).all()
-    by_ticker: dict[str, list[PricedFill]] = {}
+    by_ticker: dict[str, list[Fill]] = {}
     for f in fills:
-        by_ticker.setdefault(f.ticker, []).append(
-            PricedFill(f.id, f.side, f.trade_date, f.seq, f.price, f.quantity)
-        )
+        by_ticker.setdefault(f.ticker, []).append(f)
+    prices = PriceService(db)
     held = []
     for ticker, rows in sorted(by_ticker.items()):
-        qty = sum(float(lot.quantity) for lot in open_lots(rows))
+        # 화면 목록이라 시세를 새로 받지 않고 캐시된 분할 이력만 쓴다
+        lots = open_lots(_priced(rows, prices.cached_splits(ticker)))
+        qty = sum(float(lot.quantity) for lot in lots)
         if qty > 0:
             held.append((ticker, qty))
     return held

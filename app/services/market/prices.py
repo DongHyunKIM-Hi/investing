@@ -1,6 +1,7 @@
 """시세 조회 + price_bars 캐시. 이미 받은 기간은 다시 요청하지 않는다."""
 
 from datetime import date
+from typing import Any
 
 import pandas as pd
 from sqlalchemy import select
@@ -28,6 +29,22 @@ class PriceService:
         ).all()
         df = pd.DataFrame(rows, columns=["day", "close", "adj_close"])
         return df.set_index("day")
+
+    def splits(self, ticker: str) -> list[tuple[date, float]]:
+        """분할 이력. 캐시에 없으면 받아서 저장한다."""
+        cov = self.db.get(PriceCoverage, ticker)
+        if cov is not None and cov.splits is not None:
+            return _parse_splits(cov.splits)
+        found = self.provider.splits(ticker)
+        if cov is not None:
+            cov.splits = [[d.isoformat(), r] for d, r in found]
+            self.db.flush()
+        return found
+
+    def cached_splits(self, ticker: str) -> list[tuple[date, float]]:
+        """네트워크 없이 캐시에 있는 분할 이력만 (화면 목록용)."""
+        cov = self.db.get(PriceCoverage, ticker)
+        return _parse_splits(cov.splits) if cov is not None and cov.splits else []
 
     def _ensure(self, ticker: str, start: date, end: date) -> None:
         cov = self.db.get(PriceCoverage, ticker)
@@ -60,8 +77,16 @@ class PriceService:
                     },
                 )
             )
+        # 새 분할이 생겼을 수 있으므로 시세를 받을 때마다 갱신한다
+        splits = [[d.isoformat(), r] for d, r in self.provider.splits(ticker)]
         if cov:
-            cov.start, cov.end = fetch_start, fetch_end
+            cov.start, cov.end, cov.splits = fetch_start, fetch_end, splits
         else:
-            self.db.add(PriceCoverage(ticker=ticker, start=fetch_start, end=fetch_end))
+            self.db.add(
+                PriceCoverage(ticker=ticker, start=fetch_start, end=fetch_end, splits=splits)
+            )
         self.db.flush()
+
+
+def _parse_splits(raw: list[list[Any]]) -> list[tuple[date, float]]:
+    return [(date.fromisoformat(d), float(r)) for d, r in raw]

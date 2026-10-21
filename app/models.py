@@ -91,7 +91,7 @@ class Fill(Base):
 
 
 class LotMatch(Base):
-    """FIFO로 매칭된 매수 체결 ↔ 매도 체결 수량."""
+    """FIFO로 매칭된 매수 체결 ↔ 매도 체결 수량 (주식 분할 보정 후 '지금 기준' 수량)."""
 
     __tablename__ = "lot_matches"
 
@@ -122,3 +122,5 @@ class PriceCoverage(Base):
     ticker: Mapped[str] = mapped_column(String(16), primary_key=True)
     start: Mapped[date] = mapped_column(Date)
     end: Mapped[date] = mapped_column(Date)
+    # 주식 분할 이력 [[분할일 ISO, 비율], ...]. 시세를 새로 받을 때 함께 갱신. None이면 아직 모름
+    splits: Mapped[list[list[Any]] | None] = mapped_column(JSONB)

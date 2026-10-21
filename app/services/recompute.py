@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import Decision, Fill, LotMatch
 from app.services.importer.fifo import FillIn, match_fifo
+from app.services.importer.splits import split_factor
 from app.services.market.prices import BENCHMARK, PriceService
 from app.services.market.snapshot import build_snapshot
 from app.services.outcomes import FillLite, Leg, buy_outcome, sell_outcome, skip_outcome
@@ -40,7 +41,11 @@ def _recompute_ticker(db: Session, ticker: str, prices: PriceService) -> list[st
     if not fills:
         return warnings
 
-    fifo = match_fifo(FillIn(f.id, f.side, f.trade_date, f.seq, f.quantity) for f in fills)
+    # 분할 전 체결은 지금 기준(수량 × 비율, 가격 ÷ 비율)으로 바꿔 계산한다. 원본 체결은 그대로
+    splits = prices.splits(ticker)
+    factor = {f.id: split_factor(f.trade_date, splits) for f in fills}
+    adj_qty = {f.id: f.quantity * factor[f.id] for f in fills}
+    fifo = match_fifo(FillIn(f.id, f.side, f.trade_date, f.seq, adj_qty[f.id]) for f in fills)
     db.execute(delete(LotMatch).where(LotMatch.ticker == ticker))
     db.add_all(
         LotMatch(ticker=ticker, buy_fill_id=m.buy_id, sell_fill_id=m.sell_id, quantity=m.quantity)
@@ -52,7 +57,10 @@ def _recompute_ticker(db: Session, ticker: str, prices: PriceService) -> list[st
             f"{ticker}: 매수 기록 없이 매도된 수량 {qty.normalize()}주 (CSV 기간 이전 매수분)"
         )
 
-    lite = {f.id: FillLite(f.id, f.trade_date, f.price, f.quantity, f.fee) for f in fills}
+    lite = {
+        f.id: FillLite(f.id, f.trade_date, f.price / factor[f.id], adj_qty[f.id], f.fee)
+        for f in fills
+    }
     legs = [Leg(lite[m.buy_id], lite[m.sell_id], m.quantity) for m in fifo.matches]
 
     start = min(f.trade_date for f in fills) - LOOKBACK
