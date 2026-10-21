@@ -39,3 +39,10 @@ ul.patterns li { list-style: none; margin: .3rem 0; }
 .sim { font-size: .8rem; }
 .actions { display: flex; gap: .6rem; flex-wrap: wrap; }
 .actions form { margin: 0; }
+
+/* 리포트 */
+.bar { display: inline-block; width: 4rem; height: .5rem; margin-right: .4rem; border-radius: 999px;
+       background: var(--pico-muted-border-color); vertical-align: middle; overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--pico-primary-background); }
+.report-table tr.few td { opacity: .6; }
+ol.mistakes li { margin: .5rem 0; }

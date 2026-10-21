@@ -57,7 +57,7 @@ def _mean(values: Iterable[float | None]) -> float | None:
     return sum(vals) / len(vals) if vals else None
 
 
-def _median(values: Iterable[float | None]) -> float | None:
+def median(values: Iterable[float | None]) -> float | None:
     vals = [v for v in values if v is not None]
     return statistics.median(vals) if vals else None
 
@@ -75,7 +75,7 @@ def stats(cases: Sequence[Case]) -> Stats:
         wins=wins,
         win_rate=wins / len(cases) if cases else None,
         avg_return=_mean(c.ret for c in cases),
-        median_return=_median(c.ret for c in cases),
+        median_return=median(c.ret for c in cases),
     )
 
 
@@ -149,7 +149,7 @@ SITUATIONS: dict[str, tuple[str, Callable[[Ctx], bool]]] = {
 
 @dataclass(frozen=True)
 class Pattern:
-    kind: str  # tag | emotion | situation | ticker
+    kind: str  # tag | emotion | situation | ticker | plan
     key: str
     label: str
     stats: Stats
@@ -165,6 +165,7 @@ class Pattern:
             "emotion": f"'{self.label}' 상태로 산",
             "situation": f"{self.label} 산",
             "ticker": f"{self.label}을(를) 산",
+            "plan": self.label,
         }[self.kind]
         return f"{subject} 매매 {s.n}건 중 {s.wins}건 수익{avg}"
 

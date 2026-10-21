@@ -5,7 +5,14 @@ from decimal import Decimal as D
 import pandas as pd
 import pytest
 
-from app.services.outcomes import FillLite, Leg, buy_outcome, forward_return, sell_outcome
+from app.services.outcomes import (
+    FillLite,
+    Leg,
+    buy_outcome,
+    forward_return,
+    sell_outcome,
+    skip_outcome,
+)
 
 START = date(2026, 1, 1)
 
@@ -63,3 +70,28 @@ def test_sell_outcome_detects_selling_too_early():
     assert out["realized_return"] == pytest.approx(0.1111, abs=1e-4)
     assert out["post_exit_20d"] == pytest.approx(0.5)
     assert out["holding_days"] == 4
+
+
+def test_skip_outcome_tracks_forward_returns():
+    prices = series([100] + [90] * 4 + [110] * 15 + [120] * 40 + [130] * 5)
+    out = skip_outcome(prices, prices, START)
+    assert out["status"] == "skipped"
+    assert out["entry"] == 100
+    assert out["fwd_5d"] == pytest.approx(0.10)  # 5거래일 뒤 = 6번째 값
+    assert out["fwd_20d"] == pytest.approx(0.20)
+    assert out["fwd_60d"] == pytest.approx(0.30)
+    assert out["max_drawdown_20d"] == pytest.approx(-0.10)
+    assert out["max_runup_20d"] == pytest.approx(0.20)
+    assert out["tracking_done"] is True
+
+
+def test_skip_outcome_still_tracking():
+    prices = series([100, 95, 97])
+    out = skip_outcome(prices, prices, START)
+    assert out["fwd_5d"] is None and out["fwd_20d"] is None
+    assert out["max_drawdown_20d"] == pytest.approx(-0.05)
+    assert out["tracked_days"] == 2
+    assert out["tracking_done"] is False
+    # 오늘 보류해서 아직 다음 거래일이 없으면 모두 비어 있다
+    today = skip_outcome(prices, prices, START + timedelta(days=2))
+    assert today["max_drawdown_20d"] is None and today["tracked_days"] == 0

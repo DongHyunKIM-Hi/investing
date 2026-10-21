@@ -109,6 +109,17 @@
     <form method="post" action="/consult/{{ d.id }}/rejudge"><button class="outline">최신 기록으로 다시 판정</button></form>
   </div>
   {% if d.fills %}<small class="muted">CSV 체결 {{ d.fills|length }}건이 이 상담에 연결됐어요.</small>{% endif %}
+  {% set so = d.outcome or {} %}
+  {% if d.user_action == "skipped" and so.status == "skipped" %}
+  <p class="ctx" style="margin-top:.6rem">
+    <strong>안 산 뒤:</strong> 그날 종가({{ "%.2f"|format(so.entry) if so.entry else "–" }})에 샀다면
+    <span>5일 <span class="{{ so.fwd_5d|tone }}">{{ so.fwd_5d|pct }}</span></span>
+    <span>20일 <span class="{{ so.fwd_20d|tone }}">{{ so.fwd_20d|pct }}</span></span>
+    <span>60일 <span class="{{ so.fwd_60d|tone }}">{{ so.fwd_60d|pct }}</span></span>
+    <span>20일 안 최대낙폭 <span class="{{ so.max_drawdown_20d|tone }}">{{ so.max_drawdown_20d|pct }}</span></span>
+    <br><small class="muted">{% if so.tracking_done %}추적 끝 (60거래일 경과){% else %}추적 중 · {{ so.tracked_days }}거래일 경과. '시세·결과 재계산'을 누르면 갱신돼요{% endif %}</small>
+  </p>
+  {% endif %}
   <small class="muted">판정 시각 {{ detail.judged_at }}</small>
 </article>
 

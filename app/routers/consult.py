@@ -18,6 +18,7 @@ from app.services.engine.verdict import VERDICTS
 from app.services.llm.consult import ConsultError, RecordInput, get_llm
 from app.services.llm.keywords import suggest_tags
 from app.services.market.prices import PriceService
+from app.services.recompute import track_skipped
 from app.web import templates
 
 router = APIRouter()
@@ -212,6 +213,11 @@ def consult_action(db: DB, decision_id: int, action: Annotated[str, Form()]):
         raise HTTPException(400)
     if not d.fills:  # CSV로 실제 체결이 연결된 뒤에는 '샀음'이 사실이므로 바꾸지 않는다
         d.user_action = action
+        if action == "skipped":
+            # 시세 조회가 실패해도 선택은 저장한다 (다음 재계산 때 다시 시도)
+            track_skipped(db, PriceService(db), ids=[d.id])
+        elif (d.outcome or {}).get("status") == "skipped":
+            d.outcome = None
     db.commit()
     return RedirectResponse(f"/consult/{d.id}", status_code=303)
 

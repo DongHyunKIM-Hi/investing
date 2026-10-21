@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
+from app.services.outcomes import plan_status
+
 if TYPE_CHECKING:
     from app.models import Decision
 
@@ -27,6 +29,8 @@ class Case:
     excess: float | None = None
     max_dd: float | None = None
     post_exit_20d: float | None = None
+    holding_days: int | None = None
+    plan: str | None = None  # kept | broken | none. CSV에서 온 결정이나 청산 전이면 None
 
     def resolved_before(self, day: date) -> bool:
         """day 시점에 이미 승패가 확정돼 있었는가."""
@@ -37,8 +41,11 @@ def case_from_decision(d: "Decision") -> Case:
     o = d.outcome or {}
     closed = o.get("status") == "closed"
     has_stop: bool | None = None
-    if d.source != "csv":  # 상담에서 만든 결정만 손절 계획 여부를 안다
+    plan: str | None = None
+    if d.source != "csv":  # 상담에서 만든 결정만 계획(손절가·기간) 여부를 안다
         has_stop = d.stop_price is not None
+        stop = float(d.stop_price) if d.stop_price is not None else None
+        plan = plan_status(o, stop, d.horizon_days)
     return Case(
         id=d.id,
         ticker=d.ticker,
@@ -53,4 +60,6 @@ def case_from_decision(d: "Decision") -> Case:
         excess=o.get("excess_return") if closed else None,
         max_dd=o.get("max_drawdown") if closed else None,
         post_exit_20d=o.get("post_exit_20d") if closed else None,
+        holding_days=o.get("holding_days") if closed else None,
+        plan=plan,
     )

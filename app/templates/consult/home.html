@@ -28,7 +28,11 @@
       <td>{{ "%.0f%%"|format(d.win_prob * 100) if d.win_prob is not none else "–" }}</td>
       <td>{% for t in d.reason_tags %}<span class="tag">{{ BUY_REASONS.get(t, t) }}</span>{% endfor %}</td>
       <td>{{ {"executed": "샀음", "skipped": "안 삼", "pending": "고민 중"}[d.user_action] }}</td>
+      {% if o.status == "skipped" %}
+      <td class="{{ o.fwd_20d|tone }}">{{ o.fwd_20d|pct }} <small class="muted">(샀다면 20일)</small></td>
+      {% else %}
       <td class="{{ r|tone }}">{{ r|pct }}</td>
+      {% endif %}
     </tr>
   {% endfor %}
   </tbody>

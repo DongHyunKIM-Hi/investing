@@ -133,3 +133,64 @@ def sell_outcome(sells: list[FillLite], legs: list[Leg], adj: pd.Series) -> dict
         # 판 뒤 20거래일 동안 더 올랐다면 '너무 일찍 판' 신호
         "post_exit_20d": _r(forward_return(adj, sold_on)),
     }
+
+
+STOP_SLIPPAGE = 0.03  # 손절가보다 이만큼 더 내려간 적이 있으면 손절을 안 지킨 것으로 본다
+HORIZON_OVERRUN = 2.0  # 계획한 보유 기간의 2배를 넘겨 들고 있었으면 기간을 안 지킨 것
+
+
+def plan_status(
+    outcome: dict[str, Any], stop_price: float | None, horizon_days: int | None
+) -> str | None:
+    """청산된 매수가 세운 계획(손절가·보유 기간)을 지켰는가.
+
+    kept | broken | none(계획 없이 삼) | None(청산 전이거나 판단할 수 없음)
+    - 손절: 보유 중 최저점이 손절가 아래로 STOP_SLIPPAGE 넘게 내려갔다면 손절하지 않고 버틴 것.
+      최대낙폭은 매수일 종가 기준이라 평균 매수가와 약간 다를 수 있어 여유를 둔다.
+    - 목표가는 보지 않는다: 목표 전에 판 건 계획 위반보다 판단 변경에 가깝다.
+    """
+    if outcome.get("status") != "closed":
+        return None
+    if stop_price is None and horizon_days is None:
+        return "none"
+    if stop_price is not None:
+        entry, dd = outcome.get("avg_entry"), outcome.get("max_drawdown")
+        if not entry or dd is None:
+            return None
+        if dd < stop_price / entry - 1 - STOP_SLIPPAGE:
+            return "broken"
+    if horizon_days is not None:
+        held = outcome.get("holding_days")
+        if held is None:
+            return None
+        if held > horizon_days * HORIZON_OVERRUN:
+            return "broken"
+    return "kept"
+
+
+SKIP_WINDOWS = (5, 20, 60)  # 보류 후 추적할 거래일 수. 마지막까지 지나면 추적 끝
+
+
+def skip_outcome(close: pd.Series, adj: pd.Series, decided_on: date) -> dict[str, Any]:
+    """보류한 결정: 그날 종가에 샀다면 이후 어떻게 됐을까.
+
+    수익률은 수정종가 기준. N거래일이 아직 안 지난 구간은 None.
+    """
+    entry = value_at(close, decided_on)
+    base = value_at(adj, decided_on)
+    after = adj[adj.index > decided_on]
+    window = after.iloc[:POST_EXIT_DAYS]
+    if base and not window.empty:
+        low, high = float(window.min()) / base - 1, float(window.max()) / base - 1
+    else:
+        low = high = None
+    return {
+        "status": "skipped",
+        "tracking_done": len(after) >= SKIP_WINDOWS[-1],
+        "tracked_days": len(after),
+        "entry": entry,
+        **{f"fwd_{n}d": _r(forward_return(adj, decided_on, n)) for n in SKIP_WINDOWS},
+        # 샀다면 20거래일 안에 겪었을 최대 낙폭·최대 상승
+        "max_drawdown_20d": _r(min(low, 0.0)) if low is not None else None,
+        "max_runup_20d": _r(max(high, 0.0)) if high is not None else None,
+    }

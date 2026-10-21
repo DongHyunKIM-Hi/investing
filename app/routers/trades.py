@@ -14,7 +14,7 @@ from app.services.importer.csv_parser import ColumnMapping, parse_fills, read_cs
 from app.services.importer.pipeline import import_fills
 from app.services.importer.presets import guess_mapping
 from app.services.market.prices import PriceService
-from app.services.recompute import recompute_tickers
+from app.services.recompute import recompute_tickers, track_skipped
 from app.taxonomy import EMOTIONS, reasons_for
 from app.web import templates
 
@@ -138,7 +138,9 @@ def import_commit(
 @router.post("/recompute", response_class=HTMLResponse)
 def recompute_all(request: Request, db: DB):
     tickers = db.scalars(select(Fill.ticker).distinct()).all()
-    warnings = recompute_tickers(db, tickers, PriceService(db))
+    prices = PriceService(db)
+    warnings = recompute_tickers(db, tickers, prices)
+    warnings += track_skipped(db, prices)
     db.commit()
     return templates.TemplateResponse(
         request, "trades/_recompute_done.html", {"count": len(tickers), "warnings": warnings}

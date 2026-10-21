@@ -1,4 +1,7 @@
-"""티커 단위로 FIFO 매칭, 결정 시점 상황(context), 결과(outcome)를 다시 계산한다."""
+"""티커 단위로 FIFO 매칭, 결정 시점 상황(context), 결과(outcome)를 다시 계산한다.
+
+보류한 상담 결정은 체결이 없으므로 track_skipped로 따로 '샀다면' 결과를 추적한다.
+"""
 
 import logging
 from collections.abc import Iterable
@@ -12,7 +15,7 @@ from app.models import Decision, Fill, LotMatch
 from app.services.importer.fifo import FillIn, match_fifo
 from app.services.market.prices import BENCHMARK, PriceService
 from app.services.market.snapshot import build_snapshot
-from app.services.outcomes import FillLite, Leg, buy_outcome, sell_outcome
+from app.services.outcomes import FillLite, Leg, buy_outcome, sell_outcome, skip_outcome
 
 log = logging.getLogger(__name__)
 LOOKBACK = timedelta(days=400)  # 200일선·52주 고점 계산용
@@ -82,4 +85,30 @@ def _recompute_ticker(db: Session, ticker: str, prices: PriceService) -> list[st
                 [leg for leg in legs if leg.sell.id in ids],
                 bars["adj_close"],
             )
+    return warnings
+
+
+def track_skipped(db: Session, prices: PriceService, ids: Iterable[int] | None = None) -> list[str]:
+    """보류한 상담 결정의 이후 가격을 추적한다. 추적이 끝난 건(60거래일 경과)은 건너뛴다.
+
+    ids를 주면 그 결정만 계산한다. 반환값: 실패한 결정에 대한 경고 메시지.
+    """
+    query = select(Decision).where(Decision.user_action == "skipped", ~Decision.fills.any())
+    if ids is not None:
+        query = query.where(Decision.id.in_(list(ids)))
+    warnings: list[str] = []
+    for d in db.scalars(query).all():
+        if (d.outcome or {}).get("tracking_done"):
+            continue
+        try:
+            bars = prices.bars(d.ticker, d.decided_on - timedelta(days=10), date.today())
+        except Exception as e:
+            log.exception("skip tracking failed: %s", d.ticker)
+            warnings.append(f"{d.ticker} 보류 건: 시세 조회 실패 ({e})")
+            continue
+        if bars.empty:
+            warnings.append(f"{d.ticker} 보류 건: 시세를 찾을 수 없음")
+            continue
+        d.outcome = skip_outcome(bars["close"], bars["adj_close"], d.decided_on)
+    db.flush()
     return warnings
