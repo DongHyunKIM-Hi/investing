@@ -51,3 +51,7 @@ ol.mistakes li { margin: .5rem 0; }
 .held { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 .held form { margin: 0; }
 .held button { padding: .25rem .7rem; font-size: .85rem; }
+
+/* 메뉴: 좁은 화면에서 항목 단위로 줄바꿈 (글자 중간에서 끊기지 않게) */
+header nav ul:last-child { flex-wrap: wrap; justify-content: flex-end; }
+header nav li { white-space: nowrap; }
