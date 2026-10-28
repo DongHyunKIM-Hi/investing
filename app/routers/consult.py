@@ -23,11 +23,12 @@ from app.services.consult import (
 )
 from app.services.engine.backtest import backtest, summarize
 from app.services.engine.case import case_from_decision
-from app.services.engine.verdict import VERDICTS
+from app.services.engine.verdict import EARLY_EXIT, VERDICTS
 from app.services.llm.consult import ConsultError, Record, RecordInput, SellRecordInput, get_llm
 from app.services.llm.keywords import suggest_tags
 from app.services.market.prices import PriceService
 from app.services.recompute import track_skipped
+from app.services.scorecard import ACTIONS, build_scorecard, judged_from_decision
 from app.web import templates
 
 router = APIRouter()
@@ -298,6 +299,12 @@ def backtest_page(request: Request, db: DB):
     decisions = db.scalars(select(Decision)).all()
     rows = backtest([case_from_decision(d) for d in decisions if d.side == "buy"])
     sell_rows = backtest([case_from_decision(d) for d in decisions if d.side == "sell"])
+    # 상담 성적표: 당시 화면에 떴던 판정(verdict, 그때 데이터로 고정) vs 실제 결과
+    consults = [d for d in decisions if d.source == "consult"]
+    judged = [judged_from_decision(d) for d in consults if d.verdict]
+    unfinished = sorted(
+        (d for d in consults if d.verdict is None), key=lambda d: (d.decided_on, d.id), reverse=True
+    )
     return templates.TemplateResponse(
         request,
         "consult/backtest.html",
@@ -305,6 +312,10 @@ def backtest_page(request: Request, db: DB):
             "rows": rows,
             "summary": summarize(rows),
             "sell_summary": summarize(sell_rows),
+            "cards": [build_scorecard(judged, side) for side in ("buy", "sell")],
+            "unfinished": unfinished,
             "VERDICTS": VERDICTS,
+            "ACTIONS": ACTIONS,
+            "EARLY_EXIT": EARLY_EXIT,
         },
     )

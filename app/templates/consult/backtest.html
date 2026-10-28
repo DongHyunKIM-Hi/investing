@@ -1,8 +1,93 @@
 {% extends "base.html" %}
+{% block title %}상담 성적표 · 껄무새 탈출{% endblock %}
 {% block content %}
+{% macro rate(a, n) -%}
+  {%- if n -%}{{ "%.0f%%"|format(a / n * 100) }} <small class="muted">({{ a }}/{{ n }})</small>{%- else -%}–{%- endif -%}
+{%- endmacro %}
+
+<hgroup>
+  <h2>상담 성적표</h2>
+  <p>상담 때 실제로 떴던 판정이 맞았는지, 그리고 내가 그 판정을 따랐는지 봅니다.</p>
+</hgroup>
+<p class="muted"><small>실행한 건은 실제 체결 결과로, 보류한 건은 '그날 샀다면(팔았다면) 20거래일 뒤'로 채점해요. 적중은 추천·비추천만 따지고, 신중·데이터 부족은 채점하지 않아요.</small></p>
+
+{% for sc in cards %}
+{% set is_buy = sc.side == "buy" %}
+<article>
+  <h4>{{ "매수" if is_buy else "매도" }} 상담 {{ sc.n }}건</h4>
+  {% if sc.n == 0 %}
+  <p class="muted">아직 판정까지 간 {{ "매수" if is_buy else "매도" }} 상담이 없어요.</p>
+  {% else %}
+  <div class="metrics">
+    <div><small>판정 적중</small><strong>{{ rate(sc.hits, sc.scored) }}</strong></div>
+    <div><small>판정을 따른 비율</small><strong>{{ rate(sc.followed, sc.followable) }}</strong></div>
+    <div><small>승률 보정도 (Brier)</small><strong>{{ "%.3f"|format(sc.brier) if sc.brier is not none else "–" }}</strong>{% if sc.brier_n %} <small class="muted">{{ sc.brier_n }}건</small>{% endif %}</div>
+    <div><small>실행/보류 미정</small><strong>{{ sc.undecided }}건</strong></div>
+  </div>
+  <p class="muted"><small>Brier는 당시 승률과 실제 승패의 평균 제곱 오차예요. 0.25가 동전 던지기, 낮을수록 좋아요.</small></p>
+  <div class="overflow-auto">
+  <table class="striped">
+    <thead><tr>
+      <th>판정</th><th>건수</th><th>실행·보류·미정</th>
+      <th>{{ "산 것" if is_buy else "판 것" }}의 승률</th><th>중앙값</th>
+      <th>{{ "참은 것" if is_buy else "버틴 것" }} 중 잘한 비율</th><th>껄</th>
+    </tr></thead>
+    <tbody>
+    {% for row in sc.labels %}
+    <tr>
+      <td><span class="verdict-badge {{ row.key }}">{{ "매도 " if not is_buy and row.key in ("recommend", "against") }}{{ row.label }}</span></td>
+      <td>{{ row.n }}</td>
+      <td>{{ row.executed }} · {{ row.skipped }} · {{ row.pending }}</td>
+      <td>{{ rate(row.traded.wins, row.traded.n) }}</td>
+      <td class="{{ row.traded.median_return|tone }}">{{ row.traded.median_return|pct }}</td>
+      <td>{{ rate(row.skip_good, row.skip_n) }}</td>
+      <td>{{ row.skip_missed if row.skip_n else "–" }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted"><small>
+    {% if is_buy %}'추천'인데 안 산 건과 '비추천'인데 산 건이 판정을 거스른 매매예요. 거스른 매매의 성적이 따른 매매보다 나쁘면 판정이 도움이 되고 있는 거예요.
+    {% else %}'매도 추천'인데 버틴 건과 '매도 비추천'인데 판 건이 판정을 거스른 결정이에요. 껄은 버티다 {{ "%.0f%%"|format(EARLY_EXIT * 100) }} 넘게 떨어진 건이에요.{% endif %}
+  </small></p>
+  {% endif %}
+</article>
+{% endfor %}
+
+{% set recent = cards[0].rows + cards[1].rows %}
+{% if recent %}
+<h4>최근 판정</h4>
+<div class="overflow-auto">
+<table class="striped">
+  <thead><tr><th>날짜</th><th>종목</th><th>판정</th><th>당시 승률</th><th>내 선택</th><th>결과</th><th>적중</th></tr></thead>
+  <tbody>
+  {% for j in recent|sort(attribute="decided_on", reverse=True) %}
+  <tr>
+    <td>{{ j.decided_on }}</td>
+    <td><a href="/consult/{{ j.id }}"><strong>{{ j.ticker }}</strong></a> <small class="muted">{{ "매수" if j.side == "buy" else "매도" }}</small></td>
+    <td><span class="verdict-badge {{ j.verdict }}">{{ VERDICTS[j.verdict] }}</span></td>
+    <td>{{ "%.0f%%"|format(j.win_prob * 100) if j.win_prob is not none else "–" }}</td>
+    <td>{{ ACTIONS[j.action] }}</td>
+    <td class="{{ j.result|tone }}">{{ j.result|pct }}{% if j.action == "skipped" and j.result is not none %} <small class="muted">샀다면</small>{% endif %}</td>
+    <td>{% if j.hit is true %}<span class="up">✓</span>{% elif j.hit is false %}<span class="down">✗</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if unfinished %}
+<p class="muted"><small>판정 전에 멈춘 상담 {{ unfinished|length }}건:
+{% for d in unfinished[:5] %}<a href="/consult/{{ d.id }}">{{ d.ticker }} {{ d.decided_on }}</a>{{ ", " if not loop.last }}{% endfor %}{% if unfinished|length > 5 %} 외 {{ unfinished|length - 5 }}건{% endif %}.
+이어가거나 상담 화면에서 지울 수 있어요.</small></p>
+{% endif %}
+
+<hr>
 <hgroup>
   <h2>판정 엔진 검증</h2>
-  <p>과거 각 매수·매도 시점에, 그 전에 끝난 매매만으로 판정했다면? 실제 결과와 비교합니다.</p>
+  <p>과거 각 매수·매도 시점에, 그 전에 끝난 매매만으로 지금 엔진이 판정했다면? 실제 결과와 비교합니다.</p>
 </hgroup>
 <p class="muted"><small>엔진이 의미 있으려면 '비추천' 받은 매매의 실제 승률이 '추천'보다 낮아야 해요. 표본이 적을 땐 우연일 수 있어요.</small></p>
 <table>

@@ -25,6 +25,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - `app/services/manual.py` — 상담 뒤 체결 직접 기록(`dedup_key`가 `manual:`로 시작)·삭제. CSV로 같은 날 체결이 들어오면 수동 체결은 CSV로 대체됨
 - `app/services/market/` — `provider`(yfinance, 일시 오류 3회 재시도), `prices`(DB 캐시), `snapshot`(결정 시점 지표)
 - `app/services/outcomes.py` — 결과 지표·계획 준수 여부 (순수 함수)
+- `app/services/scorecard.py` — 상담 성적표 (`/backtest` 상단, 순수 함수): 상담 당시 판정(verdict, 고정값) vs 실제 결과·'샀다면' 결과, 판정 적중률, 판정을 따른 비율, Brier. 엔진 백테스트와 달리 '그때 화면에 떴던 판정'을 채점
 - `app/services/report.py` — 껄껄껄 리포트: 이유·감정·상황·계획·종목별 성적, 반복 실수 Top 3, 너무 일찍 판 비율 (순수 함수)
 - `app/services/recompute.py` — 티커 단위로 FIFO → context → outcome 재계산, `track_skipped`(보류한 상담 결정의 '샀다면' 결과를 `outcome`에 `status: skipped`로 기록)
 - `app/services/engine/` — 판정 엔진 (전부 순수 함수): `case`(Decision→Case, 매수·매도), `similarity`(유사 전적 Top-K), `verdict`(베타 스무딩 승률·판정·패턴), `checks`(매수 계획·매도 위험 신호), `summary`(판정 화면 맨 위 한 줄 결론: 승률 → 나쁜 패턴 → 급한 경고, `verdict_detail.headline`에 고정), `backtest`(엔진 사후 검증)
@@ -51,12 +52,13 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - 상담 대화는 API content 블록 그대로 append-only 저장·재전송 (thinking 블록 수정 금지)
 
 ## 계획
-전체 로드맵: `/Users/viva/.claude/plans/scalable-finding-pudding.md`
+최초 설계: `/Users/viva/.claude/plans/scalable-finding-pudding.md`. 이후 고도화 단계와 우선순위는 `ROADMAP.md` (완료 항목 체크 유지)
 - [x] 1단계: 기반 + CSV 가져오기 + FIFO + 결과 지표 + 사후 이유 태깅
 - [x] 2단계: 매수 전 상담 (Claude 대화 → 태그 추출 → 상황 스냅샷)
 - [x] 3단계: 유사 전적 매칭 + 승률·판정 (+ 엔진 백테스트 `/backtest`)
 - [x] 4단계: 매도 상담 + 보류 건 추적 + 껄껄껄 리포트 (`/report`)
 - [x] 4단계 보완: 체결 직접 기록(CSV 없이 결과 추적), 결정 상세·태그 수정, 기록 필터, 상담 삭제, 재계산 CLI
+- [ ] 5단계(신뢰 측정, `ROADMAP.md`): [x] 상담 성적표 · [ ] 주간 회고 · [ ] 판정 거스른 이유 기록 · [ ] 결정 상세 미니 차트
 - [x] 보유 현황·계획 점검 (`/positions`): 손절 이탈·목표 도달·기간 초과·계획 없음 알림
 - [x] 런칭 준비: 프롬프트 개정, Dockerfile·compose app 프로필·/health, 에러 화면, 로그인 실패 지연, 기본 비밀값 경고, 첫 사용 안내, README, 결정 CSV 내보내기, 백업 스크립트
 
