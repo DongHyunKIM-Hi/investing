@@ -4,6 +4,7 @@
 <ul>
   <li>새 체결 <strong>{{ summary.new_fills }}</strong>건 (이미 있던 체결 {{ summary.duplicates }}건 건너뜀)</li>
   <li>새 결정 <strong>{{ summary.new_decisions }}</strong>건{% if summary.linked_decisions %}, 상담 기록에 연결 {{ summary.linked_decisions }}건{% endif %}</li>
+  {% if summary.replaced_manual %}<li>직접 기록했던 체결 {{ summary.replaced_manual }}건을 CSV 체결로 바꿨어요</li>{% endif %}
   <li>종목: {{ summary.tickers|sort|join(", ") or "–" }}</li>
 </ul>
 {% if warnings %}

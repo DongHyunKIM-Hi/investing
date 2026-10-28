@@ -19,7 +19,8 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 ## 구조
 - `app/models.py` — Decision(결정: 이유·감정·context·outcome·판정), ConsultMessage(상담 대화), Fill(체결), LotMatch(FIFO 매칭), PriceBar/PriceCoverage(시세 캐시)
 - `app/taxonomy.py` — 이유·감정 고정 어휘. **key는 유사도 매칭 기준이므로 바꾸지 말 것** (label만 수정 가능)
-- `app/services/importer/` — `csv_parser`(CSV·xlsx→ParsedFill, 위쪽 제목 줄 자동 건너뜀), `presets`(증권사별 매핑·헤더 추측), `fifo`, `pipeline`(DB 저장, 같은 날·종목·방향 체결을 Decision 하나로 묶음)
+- `app/services/importer/` — `csv_parser`(CSV·xlsx→ParsedFill, 위쪽 제목 줄 자동 건너뜀), `presets`(증권사별 매핑·헤더 추측), `fifo`, `pipeline`(DB 저장, 같은 날·종목·방향 체결을 Decision 하나로 묶음. 상담 결정과 연결: 같은 날 수동 체결 → 상담일 전후 3일/+1일 순)
+- `app/services/manual.py` — 상담 뒤 체결 직접 기록(`dedup_key`가 `manual:`로 시작)·삭제. CSV로 같은 날 체결이 들어오면 수동 체결은 CSV로 대체됨
 - `app/services/market/` — `provider`(yfinance), `prices`(DB 캐시), `snapshot`(결정 시점 지표)
 - `app/services/outcomes.py` — 결과 지표·계획 준수 여부 (순수 함수)
 - `app/services/report.py` — 껄껄껄 리포트: 이유·감정·상황·계획·종목별 성적, 반복 실수 Top 3, 너무 일찍 판 비율 (순수 함수)
@@ -29,7 +30,8 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - `app/services/position.py` — 보유 lot·평단가·평가 손익 (매도 상담 시작 시 context에 저장)
 - `app/services/llm/` — `consult`(Claude 상담: record_decision 도구로 구조화, 매수·매도 도구 따로), `prompts/consult_system.md`·`consult_sell_system.md`(상담 지침), `keywords`(API 키 없을 때 태그 추천)
 - `app/services/consult.py` — 상담 시작(스냅샷, 매도면 보유 현황·살 때 계획) → 대화/폼 기록 → `judge`(같은 쪽 과거 결정과 비교, 판정 결과를 verdict_detail에 고정)
-- `app/routers/` + `app/templates/` — FastAPI + Jinja2 + HTMX (JS 프론트엔드 없음)
+- `app/routers/` + `app/templates/` — FastAPI + Jinja2 + HTMX (JS 프론트엔드 없음). `/trades/{id}` 결정 상세(체결·결과·태그 수정), `trades/_fills.html`은 판정 화면과 상세 화면이 함께 씀
+- `scripts/recompute.py` — 화면의 '시세·결과 재계산'과 같은 일을 하는 cron용 CLI (보류 건 추적 포함)
 
 ## 규칙
 - 계산 로직은 DB 없는 순수 함수로 두고 `tests/`에서 단위 테스트
@@ -50,6 +52,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - [x] 2단계: 매수 전 상담 (Claude 대화 → 태그 추출 → 상황 스냅샷)
 - [x] 3단계: 유사 전적 매칭 + 승률·판정 (+ 엔진 백테스트 `/backtest`)
 - [x] 4단계: 매도 상담 + 보류 건 추적 + 껄껄껄 리포트 (`/report`)
+- [x] 4단계 보완: 체결 직접 기록(CSV 없이 결과 추적), 결정 상세·태그 수정, 기록 필터, 상담 삭제, 재계산 CLI
 
 ## 알려진 한계
 - 주식 분할은 계산 시 체결을 지금 기준으로 보정함(`importer/splits.py`, 분할 이력은 `price_coverage.splits`에 캐시). 단 상담에서 남긴 목표가·손절가는 보정하지 않으므로 상담 후 분할되면 어긋남
@@ -59,5 +62,6 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - 유사도 가중치·척도(`similarity.py` 상수)와 판정 임계값(`verdict.py`)은 직관값 — 데이터가 쌓이면 백테스트로 조정
 - 매도 판정 기준(판 뒤 20일 안 오르면 잘 판 것)과 매도 점검 임계값(5일 -15% 급락, 익절 +5% 미만)은 직관값. 데모 데이터 백테스트에서는 매도 추천/비추천이 거꾸로 나옴(표본 5·3건, 매도 이유 미태깅) — 실제 데이터로 `/backtest` 확인 필요
 - 보류 건은 '그날 종가에 샀다면'으로 계산 (실제로 살 수 있었던 가격과 다를 수 있음)
+- 직접 기록한 체결은 날짜가 CSV와 같아야 대체됨. 날짜를 틀리게 적으면 CSV 가져오기 때 같은 거래가 두 번 잡힐 수 있음 (상세 화면에서 수동 체결을 지우면 됨)
 - 계획 준수의 손절 판정은 매수일 종가 기준 최대낙폭으로 근사 (3% 여유)
 - 백테스트 화면의 '너무 일찍 판 비율'은 청산 후 20거래일 데이터를 쓰므로 그 시점엔 몰랐던 정보가 섞일 수 있음

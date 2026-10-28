@@ -10,6 +10,24 @@
   <span id="recompute-busy" class="htmx-indicator muted">계산 중…</span>
 </div>
 <div id="recompute"></div>
+<form method="get" action="/trades" class="filters">
+  <select name="ticker" aria-label="종목">
+    <option value="">모든 종목</option>
+    {% for t in tickers %}<option value="{{ t }}" {% if t == filter.ticker %}selected{% endif %}>{{ t }}</option>{% endfor %}
+  </select>
+  <select name="side" aria-label="구분">
+    <option value="">매수·매도</option>
+    <option value="buy" {% if filter.side == "buy" %}selected{% endif %}>매수만</option>
+    <option value="sell" {% if filter.side == "sell" %}selected{% endif %}>매도만</option>
+  </select>
+  <select name="status" aria-label="상태">
+    <option value="">전체 상태</option>
+    <option value="open" {% if filter.status == "open" %}selected{% endif %}>보유 중</option>
+    <option value="closed" {% if filter.status == "closed" %}selected{% endif %}>청산</option>
+  </select>
+  <button type="submit" class="outline">필터</button>
+  {% if filtered %}<a href="/trades" role="button" class="outline secondary">지우기</a>{% endif %}
+</form>
 {% if decisions %}
 <div class="overflow-auto">
 <table class="striped">
@@ -23,7 +41,7 @@
     {% set r = o.realized_return if o.status in ("closed", None) or d.side == "sell" else o.mark_return %}
     <tr>
       <td>{{ d.decided_on }}</td>
-      <td><strong>{{ d.ticker }}</strong></td>
+      <td><a href="/trades/{{ d.id }}"><strong>{{ d.ticker }}</strong></a>{% if d.source == "consult" %} <small class="muted" title="상담으로 만든 결정">상담</small>{% endif %}</td>
       <td>{{ "매수" if d.side == "buy" else "매도" }}</td>
       <td>
         {% set labels = BUY_REASONS if d.side == "buy" else SELL_REASONS %}
@@ -40,6 +58,8 @@
   </tbody>
 </table>
 </div>
+{% elif filtered %}
+<p class="muted">조건에 맞는 결정이 없어요.</p>
 {% else %}
 <p class="muted">아직 기록이 없습니다. 증권사 체결내역 CSV를 가져와 시작하세요.</p>
 {% endif %}

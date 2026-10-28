@@ -96,7 +96,13 @@ def consult_start(
 
 
 @router.get("/consult/{decision_id}", response_class=HTMLResponse)
-def consult_page(request: Request, db: DB, decision_id: int):
+def consult_page(
+    request: Request,
+    db: DB,
+    decision_id: int,
+    error: str | None = None,
+    notice: str | None = None,
+):
     d = _get(db, decision_id)
     if d.verdict is None:
         suggested, emotion = suggest_tags(d.reason_text or "", d.side)
@@ -116,11 +122,31 @@ def consult_page(request: Request, db: DB, decision_id: int):
     ids = [m["id"] for m in detail.get("matches", [])]
     by_id = {x.id: x for x in db.scalars(select(Decision).where(Decision.id.in_(ids)))}
     matches = [(m, by_id[m["id"]]) for m in detail.get("matches", []) if m["id"] in by_id]
+    fills = sorted(d.fills, key=lambda f: (f.trade_date, f.seq, f.id))
     return templates.TemplateResponse(
         request,
         "consult/verdict.html" if d.side == "buy" else "consult/sell_verdict.html",
-        {"d": d, "detail": detail, "matches": matches, "VERDICTS": VERDICTS},
+        {
+            "d": d,
+            "detail": detail,
+            "matches": matches,
+            "fills": fills,
+            "error": error,
+            "notice": notice,
+            "VERDICTS": VERDICTS,
+        },
     )
+
+
+@router.post("/consult/{decision_id}/delete")
+def consult_delete(db: DB, decision_id: int):
+    """잘못 시작했거나 그만둔 상담을 지운다. 실제 체결이 붙은 결정은 매매 기록이므로 못 지운다."""
+    d = _get(db, decision_id)
+    if d.fills:
+        raise HTTPException(400, "체결이 연결된 상담은 지울 수 없어요.")
+    db.delete(d)
+    db.commit()
+    return RedirectResponse("/consult", status_code=303)
 
 
 @router.post("/consult/{decision_id}/chat", response_class=HTMLResponse)
@@ -251,7 +277,9 @@ def consult_action(db: DB, decision_id: int, action: Annotated[str, Form()]):
         elif (d.outcome or {}).get("status") == "skipped":
             d.outcome = None
     db.commit()
-    return RedirectResponse(f"/consult/{d.id}", status_code=303)
+    # '샀어요/팔았어요'를 고르면 체결을 바로 적을 수 있게 그 칸으로 내려간다
+    anchor = "#fills" if action == "executed" and not d.fills else ""
+    return RedirectResponse(f"/consult/{d.id}{anchor}", status_code=303)
 
 
 @router.get("/backtest", response_class=HTMLResponse)

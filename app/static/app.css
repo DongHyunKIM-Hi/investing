@@ -55,3 +55,11 @@ ol.mistakes li { margin: .5rem 0; }
 /* 메뉴: 좁은 화면에서 항목 단위로 줄바꿈 (글자 중간에서 끊기지 않게) */
 header nav ul:last-child { flex-wrap: wrap; justify-content: flex-end; }
 header nav li { white-space: nowrap; }
+
+/* 체결 기록 · 필터 · 삭제 */
+button.small { padding: .2rem .6rem; font-size: .8rem; margin: 0; }
+.filters { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin: 1rem 0; }
+.filters select { width: auto; margin: 0; }
+.filters button, .filters a[role="button"] { margin: 0; padding: .4rem .9rem; }
+.cancel-consult { margin-top: 1.5rem; }
+.cancel-consult button, .danger-zone button { font-size: .85rem; padding: .3rem .8rem; }

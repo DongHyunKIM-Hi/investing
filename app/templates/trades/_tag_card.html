@@ -3,7 +3,7 @@
 {% set reasons = BUY_REASONS if d.side == "buy" else SELL_REASONS %}
 <article id="decision-{{ d.id }}">
   <header>
-    <strong>{{ d.decided_on }} · {{ d.ticker }} · {{ "매수" if d.side == "buy" else "매도" }}</strong>
+    <strong><a href="/trades/{{ d.id }}">{{ d.decided_on }} · {{ d.ticker }} · {{ "매수" if d.side == "buy" else "매도" }}</a></strong>
     {% set r = o.realized_return if o.realized_return is not none else o.mark_return %}
     {% if r is not none %} → <span class="{{ r|tone }}">{{ r|pct }}</span>{% endif %}
   </header>
@@ -20,16 +20,16 @@
     <fieldset class="chips">
       <legend>이유 (여러 개 가능)</legend>
       {% for key, label in reasons.items() %}
-      <label><input type="checkbox" name="reasons" value="{{ key }}">{{ label }}</label>
+      <label><input type="checkbox" name="reasons" value="{{ key }}" {% if key in d.reason_tags %}checked{% endif %}>{{ label }}</label>
       {% endfor %}
     </fieldset>
     <fieldset class="chips">
       <legend>그때 기분</legend>
       {% for key, label in EMOTIONS.items() %}
-      <label><input type="radio" name="emotion" value="{{ key }}" {% if key == "unknown" %}checked{% endif %}>{{ label }}</label>
+      <label><input type="radio" name="emotion" value="{{ key }}" {% if key == (d.emotion or "unknown") %}checked{% endif %}>{{ label }}</label>
       {% endfor %}
     </fieldset>
-    <input name="reason_text" placeholder="한 줄 메모 (선택)">
+    <input name="reason_text" placeholder="한 줄 메모 (선택)" value="{{ d.reason_text or '' }}">
     <button type="submit">저장</button>
   </form>
 </article>

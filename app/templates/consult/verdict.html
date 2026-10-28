@@ -108,7 +108,7 @@
   {% endfor %}
     <form method="post" action="/consult/{{ d.id }}/rejudge"><button class="outline">최신 기록으로 다시 판정</button></form>
   </div>
-  {% if d.fills %}<small class="muted">CSV 체결 {{ d.fills|length }}건이 이 상담에 연결됐어요.</small>{% endif %}
+  {% if d.fills %}<small class="muted">체결 {{ d.fills|length }}건이 이 상담에 연결돼 있어요 (아래 '실제 체결' 참고).</small>{% endif %}
   {% set so = d.outcome or {} %}
   {% if d.user_action == "skipped" and so.status == "skipped" %}
   <p class="ctx" style="margin-top:.6rem">
@@ -122,6 +122,18 @@
   {% endif %}
   <small class="muted">판정 시각 {{ detail.judged_at }}</small>
 </article>
+
+{% if d.user_action != "skipped" %}
+{% with next_url="/consult/" ~ d.id %}{% include "trades/_fills.html" %}{% endwith %}
+{% endif %}
+
+{% if not d.fills %}
+<details class="danger-zone">
+  <summary class="muted">이 상담 지우기</summary>
+  <p class="muted"><small>잘못 시작했거나 기록으로 남기지 않을 상담이면 지울 수 있어요. 지우면 되돌릴 수 없어요.</small></p>
+  <form method="post" action="/consult/{{ d.id }}/delete"><button class="outline secondary">상담 기록 삭제</button></form>
+</details>
+{% endif %}
 
 {% if d.messages %}
 <details>

@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi.templating import Jinja2Templates
 from jinja2 import Undefined
 
@@ -24,5 +26,9 @@ templates = Jinja2Templates(directory=ROOT_DIR / "app" / "templates")
 templates.env.filters["pct"] = pct
 templates.env.filters["tone"] = tone
 templates.env.globals.update(
-    BUY_REASONS=BUY_REASONS, SELL_REASONS=SELL_REASONS, EMOTIONS=EMOTIONS, reasons_for=reasons_for
+    BUY_REASONS=BUY_REASONS,
+    SELL_REASONS=SELL_REASONS,
+    EMOTIONS=EMOTIONS,
+    reasons_for=reasons_for,
+    today=date.today,
 )

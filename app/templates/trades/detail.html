@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ d.ticker }} {{ "매수" if d.side == "buy" else "매도" }} {{ d.decided_on }} · 껄무새 탈출{% endblock %}
+{% block content %}
+{% set c = d.context or {} %}
+{% set o = d.outcome or {} %}
+{% set sources = {"csv": "CSV 가져오기", "consult": "상담", "manual": "직접 입력"} %}
+<hgroup>
+  <h2>{{ d.ticker }} {{ "매수" if d.side == "buy" else "매도" }} · {{ d.decided_on }}</h2>
+  <p>{{ sources.get(d.source, d.source) }}로 만든 결정
+    {% if d.source == "consult" %}· <a href="/consult/{{ d.id }}">{{ "판정 화면" if d.verdict else "상담 화면" }}으로</a>{% endif %}
+    · <a href="/trades?ticker={{ d.ticker }}">{{ d.ticker }} 기록 전체</a></p>
+</hgroup>
+
+{% if o and o.status != "skipped" %}
+<article>
+  <header><strong>결과</strong>
+    {% if d.side == "buy" %}<small class="muted">{{ {"open": "보유 중", "partial": "일부 매도", "closed": "청산"}.get(o.status, "") }}{% if o.closed_on %} · {{ o.closed_on }} 청산{% endif %}</small>{% endif %}</header>
+  <div class="metrics">
+    {% if d.side == "buy" %}
+    <div><small>평균 매수가</small><b>{% if o.avg_entry %}${{ "%.2f"|format(o.avg_entry) }}{% else %}–{% endif %}</b></div>
+    <div><small>{{ "실현 수익률" if o.status == "closed" else "평가 수익률" }}</small>
+      {% set r = o.realized_return if o.status == "closed" else o.mark_return %}<b class="{{ r|tone }}">{{ r|pct }}</b></div>
+    <div><small>SPY 대비</small><b class="{{ o.excess_return|tone }}">{{ o.excess_return|pct }}</b></div>
+    <div><small>보유일</small><b>{{ o.holding_days if o.holding_days is not none else "–" }}</b></div>
+    <div><small>보유 중 최대낙폭</small><b class="{{ o.max_drawdown|tone }}">{{ o.max_drawdown|pct }}</b></div>
+    <div><small>판 뒤 20일</small><b class="{{ o.post_exit_20d|tone }}">{{ o.post_exit_20d|pct }}</b></div>
+    {% else %}
+    <div><small>판 날</small><b>{{ o.sold_on or "–" }}</b></div>
+    <div><small>실현 수익률</small><b class="{{ o.realized_return|tone }}">{{ o.realized_return|pct }}</b></div>
+    <div><small>보유일</small><b>{{ o.holding_days if o.holding_days is not none else "–" }}</b></div>
+    <div><small>판 뒤 20일</small><b class="{{ o.post_exit_20d|tone }}">{{ o.post_exit_20d|pct }}</b>
+      {% if o.post_exit_20d is none %}<small class="muted">아직 20거래일 전</small>{% endif %}</div>
+    {% endif %}
+  </div>
+</article>
+{% endif %}
+
+{% with next_url="/trades/" ~ d.id %}{% include "trades/_fills.html" %}{% endwith %}
+
+{% if c.as_of %}
+<article>
+  <header><strong>결정 당시 상황</strong> <small class="muted">{{ c.as_of }} 종가 기준</small></header>
+  <div class="metrics">
+    <div><small>직전 5일</small><b class="{{ c.ret_5d|tone }}">{{ c.ret_5d|pct }}</b></div>
+    <div><small>직전 20일</small><b class="{{ c.ret_20d|tone }}">{{ c.ret_20d|pct }}</b></div>
+    <div><small>52주 고점 대비</small><b>{{ c.from_52w_high|pct }}</b></div>
+    <div><small>50일선 대비</small><b class="{{ c.vs_ma50|tone }}">{{ c.vs_ma50|pct }}</b></div>
+    <div><small>RSI(14)</small><b>{{ c.rsi14 if c.rsi14 is not none else "–" }}</b></div>
+    <div><small>SPY 20일</small><b class="{{ c.spy_ret_20d|tone }}">{{ c.spy_ret_20d|pct }}</b></div>
+  </div>
+</article>
+{% endif %}
+
+<h4>왜 {{ "샀나" if d.side == "buy" else "팔았나" }}</h4>
+{% if d.target_price or d.stop_price or d.horizon_days %}
+<p class="ctx muted">상담 때 계획:
+  <span>목표가 {{ "$%g"|format(d.target_price|float) if d.target_price else "없음" }}</span>
+  <span>손절가 {{ "$%g"|format(d.stop_price|float) if d.stop_price else "없음" }}</span>
+  <span>기간 {{ d.horizon_days ~ "일" if d.horizon_days else "없음" }}</span></p>
+{% endif %}
+{% include "trades/_tag_card.html" %}
+{% endblock %}

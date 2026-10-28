@@ -1,0 +1,48 @@
+{# 결정에 붙은 실제 체결 + 직접 기록 폼. d, fills, next_url(돌아갈 경로), error, notice를 받는다 #}
+{% set c = d.context or {} %}
+<article id="fills">
+  <header><strong>실제 체결</strong>
+    <small class="muted">{% if d.side == "buy" %}샀다면 체결가·수량을 남겨야 결과가 추적돼요{% else %}팔았다면 체결가·수량을 남겨야 판 뒤 흐름이 추적돼요{% endif %}. 나중에 CSV를 올리면 직접 기록한 체결은 CSV 체결로 바뀌어요.</small>
+  </header>
+  {% if error %}<p class="flag high">{{ error }}</p>{% endif %}
+  {% if notice %}<p class="flag good">{{ notice }}</p>{% endif %}
+  {% if fills %}
+  <div class="overflow-auto">
+  <table>
+    <thead><tr><th>체결일</th><th>구분</th><th>체결가</th><th>수량</th><th>수수료</th><th>출처</th><th></th></tr></thead>
+    <tbody>
+    {% for f in fills %}
+    <tr>
+      <td>{{ f.trade_date }}</td>
+      <td>{{ "매수" if f.side == "buy" else "매도" }}</td>
+      <td>${{ "%.2f"|format(f.price|float) }}</td>
+      <td>{{ "%g"|format(f.quantity|float) }}주</td>
+      <td>{{ "%.2f"|format(f.fee|float) }}</td>
+      {% if f.dedup_key.startswith("manual:") %}
+      <td><span class="tag">직접 기록</span></td>
+      <td><form method="post" action="/trades/{{ d.id }}/fills/{{ f.id }}/delete" style="margin:0">
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <button class="outline secondary small">지우기</button></form></td>
+      {% else %}
+      <td><span class="muted">CSV</span></td><td></td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  <details {% if not fills and (d.user_action == "executed" or d.source == "csv") %}open{% endif %}>
+    <summary>{{ "체결 직접 기록" if not fills else "체결 더 기록" }}</summary>
+    <form method="post" action="/trades/{{ d.id }}/fills">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <div class="grid">
+        <label>체결일<input type="date" name="trade_date" value="{{ today().isoformat() }}" max="{{ today().isoformat() }}" required></label>
+        <label>체결가 ($)<input name="price" inputmode="decimal" required placeholder="{% if c.last_close %}예: {{ '%.2f'|format(c.last_close) }}{% endif %}"></label>
+        <label>수량 (주)<input name="quantity" inputmode="decimal" required placeholder="예: 10"></label>
+        <label>수수료 ($)<input name="fee" inputmode="decimal" value="0"></label>
+      </div>
+      <button type="submit" class="outline">{{ "샀어요, 기록" if d.side == "buy" else "팔았어요, 기록" }}</button>
+    </form>
+  </details>
+</article>
