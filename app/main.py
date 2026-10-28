@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import ROOT_DIR, settings
-from app.routers import auth, consult, report, trades
+from app.routers import auth, consult, positions, report, trades
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,6 +27,7 @@ app.mount("/static", StaticFiles(directory=ROOT_DIR / "app" / "static"), name="s
 app.include_router(auth.router)
 app.include_router(trades.router)
 app.include_router(consult.router)
+app.include_router(positions.router)
 app.include_router(report.router)
 
 

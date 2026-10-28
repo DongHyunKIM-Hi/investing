@@ -28,6 +28,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - `app/services/engine/` — 판정 엔진 (전부 순수 함수): `case`(Decision→Case, 매수·매도), `similarity`(유사 전적 Top-K), `verdict`(베타 스무딩 승률·판정·패턴), `checks`(매수 계획·매도 위험 신호), `backtest`(엔진 사후 검증)
   - 매도 Case: 판 뒤 20거래일 동안 안 오르면 win, `ret` = -(판 뒤 20일 수익률), `closed_on` = 그 20거래일째(`post_exit_on`). 그래서 매수와 같은 `decide`를 쓴다
 - `app/services/position.py` — 보유 lot·평단가·평가 손익 (매도 상담 시작 시 context에 저장)
+- `app/services/watch.py` — 보유 종목 계획 점검 (순수 함수): 살 때 남긴 손절가·목표가·기간과 현재가 대조 → `/positions` 화면. 시세는 캐시만 쓰고 '시세 갱신' 버튼으로 받음
 - `app/services/llm/` — `consult`(Claude 상담: record_decision 도구로 구조화, 매수·매도 도구 따로), `prompts/consult_system.md`·`consult_sell_system.md`(상담 지침), `keywords`(API 키 없을 때 태그 추천)
 - `app/services/consult.py` — 상담 시작(스냅샷, 매도면 보유 현황·살 때 계획) → 대화/폼 기록 → `judge`(같은 쪽 과거 결정과 비교, 판정 결과를 verdict_detail에 고정)
 - `app/routers/` + `app/templates/` — FastAPI + Jinja2 + HTMX (JS 프론트엔드 없음). `/trades/{id}` 결정 상세(체결·결과·태그 수정), `trades/_fills.html`은 판정 화면과 상세 화면이 함께 씀
@@ -53,15 +54,17 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - [x] 3단계: 유사 전적 매칭 + 승률·판정 (+ 엔진 백테스트 `/backtest`)
 - [x] 4단계: 매도 상담 + 보류 건 추적 + 껄껄껄 리포트 (`/report`)
 - [x] 4단계 보완: 체결 직접 기록(CSV 없이 결과 추적), 결정 상세·태그 수정, 기록 필터, 상담 삭제, 재계산 CLI
+- [x] 보유 현황·계획 점검 (`/positions`): 손절 이탈·목표 도달·기간 초과·계획 없음 알림
 
 ## 알려진 한계
 - 주식 분할은 계산 시 체결을 지금 기준으로 보정함(`importer/splits.py`, 분할 이력은 `price_coverage.splits`에 캐시). 단 상담에서 남긴 목표가·손절가는 보정하지 않으므로 상담 후 분할되면 어긋남
 - 실적발표일 지표 미구현 (yfinance 과거 실적일 신뢰도 낮음)
 - 증권사 프리셋은 `generic`만 있음 — 토스증권 내보내기 형식은 공개 자료로 확인 못 함. 실제 파일을 받으면 `presets.py`에 추가 (그 전까지는 헤더 추측 + 컬럼 맞추기 화면으로 가져옴)
-- 대화형 상담은 가짜 LLM으로만 흐름 검증됨 (실제 API 키로 프롬프트 품질 미검증)
+- 대화형 상담은 가짜 LLM으로만 흐름 검증됨 (실제 API 키로 프롬프트 품질 미검증 — 2026-10-28 기준 `.env`의 키 값이 비어 있음)
 - 유사도 가중치·척도(`similarity.py` 상수)와 판정 임계값(`verdict.py`)은 직관값 — 데이터가 쌓이면 백테스트로 조정
 - 매도 판정 기준(판 뒤 20일 안 오르면 잘 판 것)과 매도 점검 임계값(5일 -15% 급락, 익절 +5% 미만)은 직관값. 데모 데이터 백테스트에서는 매도 추천/비추천이 거꾸로 나옴(표본 5·3건, 매도 이유 미태깅) — 실제 데이터로 `/backtest` 확인 필요
 - 보류 건은 '그날 종가에 샀다면'으로 계산 (실제로 살 수 있었던 가격과 다를 수 있음)
 - 직접 기록한 체결은 날짜가 CSV와 같아야 대체됨. 날짜를 틀리게 적으면 CSV 가져오기 때 같은 거래가 두 번 잡힐 수 있음 (상세 화면에서 수동 체결을 지우면 됨)
 - 계획 준수의 손절 판정은 매수일 종가 기준 최대낙폭으로 근사 (3% 여유)
+- 보유 현황의 계획은 지금 열린 lot 중 가장 최근 상담 하나만 보여줌. 같은 종목을 여러 번 상담해 샀으면 이전 계획은 무시됨. 평단가는 전체 lot 기준이라 그 상담의 매수가와 다를 수 있음
 - 백테스트 화면의 '너무 일찍 판 비율'은 청산 후 20거래일 데이터를 쓰므로 그 시점엔 몰랐던 정보가 섞일 수 있음

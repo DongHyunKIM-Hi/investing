@@ -50,7 +50,7 @@ def start_consult(db: Session, ticker: str, prices: PriceService, side: str = "b
         ctx["next_earnings"] = earnings.isoformat()
 
     if side == "sell":
-        ctx.update(_holding(db, ticker, ctx.get("last_close"), today, prices.splits(ticker)))
+        ctx.update(holding_of(db, ticker, ctx.get("last_close"), today, prices.splits(ticker)))
 
     decision = Decision(
         ticker=ticker,
@@ -76,10 +76,10 @@ def _priced(fills: Iterable[Fill], splits: Sequence[Split]) -> list[PricedFill]:
     return out
 
 
-def _holding(
+def holding_of(
     db: Session, ticker: str, last_close: float | None, today: date, splits: Sequence[Split]
 ) -> dict[str, Any]:
-    """지금 보유 중인 lot 요약 + 그 lot을 살 때 상담에서 남긴 계획 (가장 최근 것)."""
+    """지금 보유 중인 lot 요약 + 그 lot을 살 때 상담에서 남긴 계획 (가장 최근 것). 없으면 {}."""
     fills = db.scalars(select(Fill).where(Fill.ticker == ticker)).all()
     lots = open_lots(_priced(fills, splits))
     pos = summarize_position(lots, last_close, today)

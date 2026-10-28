@@ -1,6 +1,6 @@
 """시세 조회 + price_bars 캐시. 이미 받은 기간은 다시 요청하지 않는다."""
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import pandas as pd
@@ -40,6 +40,21 @@ class PriceService:
             cov.splits = [[d.isoformat(), r] for d, r in found]
             self.db.flush()
         return found
+
+    def last_bar(self, ticker: str) -> tuple[date, float] | None:
+        """캐시에 있는 마지막 (거래일, 종가). 네트워크 없이 화면 목록용."""
+        row = self.db.execute(
+            select(PriceBar.day, PriceBar.close)
+            .where(PriceBar.ticker == ticker)
+            .order_by(PriceBar.day.desc())
+            .limit(1)
+        ).first()
+        return (row[0], float(row[1])) if row else None
+
+    def refresh(self, ticker: str, days: int = 10) -> None:
+        """최근 며칠 시세를 받아 캐시를 오늘까지 늘린다."""
+        today = date.today()
+        self.bars(ticker, today - timedelta(days=days), today)
 
     def cached_splits(self, ticker: str) -> list[tuple[date, float]]:
         """네트워크 없이 캐시에 있는 분할 이력만 (화면 목록용)."""
