@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.models import Decision, Fill
+from app.services.chart_data import decision_chart
 from app.services.consult import (
     apply_record,
     chat,
@@ -146,6 +147,7 @@ def consult_page(
             "detail": detail,
             "matches": matches,
             "fills": fills,
+            "chart": decision_chart(db, d, PriceService(db), date.today()),
             "error": error,
             "notice": notice,
             "VERDICTS": VERDICTS,

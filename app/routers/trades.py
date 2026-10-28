@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.models import Decision, Fill
+from app.services.chart_data import decision_chart
 from app.services.importer.csv_parser import ColumnMapping, parse_fills, read_table
 from app.services.importer.pipeline import import_fills
 from app.services.importer.presets import guess_mapping
@@ -254,7 +255,13 @@ def decision_detail(
     return templates.TemplateResponse(
         request,
         "trades/detail.html",
-        {"d": d, "fills": fills, "error": error, "notice": notice},
+        {
+            "d": d,
+            "fills": fills,
+            "chart": decision_chart(db, d, PriceService(db), date.today()),
+            "error": error,
+            "notice": notice,
+        },
     )
 
 

@@ -93,6 +93,11 @@
 </div>
 {% endif %}
 
+{% if chart %}
+<figure class="chart-card">{{ chart|safe }}
+  <figcaption class="muted"><small>종가 흐름 · ▲매수 ▼매도 · 점선은 결정일과 상담 때 적은 목표가·손절가. 캐시된 시세만 그려요.</small></figcaption>
+</figure>
+{% endif %}
 <article>
   <header><strong>그래서, 어떻게 하실 건가요?</strong> <small class="muted">안 판 것도 기록해 두면 나중에 '버틴 게 잘한 건지' 알 수 있어요</small></header>
   {% set labels = {"executed": "팔았어요", "skipped": "안 팔래요", "pending": "고민 중"} %}

@@ -11,6 +11,11 @@
     · <a href="/trades?ticker={{ d.ticker }}">{{ d.ticker }} 기록 전체</a></p>
 </hgroup>
 
+{% if chart %}
+<figure class="chart-card">{{ chart|safe }}
+  <figcaption class="muted"><small>종가 흐름 · ▲매수 ▼매도 · 점선은 결정일과 상담 때 적은 목표가·손절가. 캐시된 시세만 그려요.</small></figcaption>
+</figure>
+{% endif %}
 {% if o and o.status != "skipped" %}
 <article>
   <header><strong>결과</strong>

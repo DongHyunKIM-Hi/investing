@@ -41,6 +41,15 @@ class PriceService:
             self.db.flush()
         return found
 
+    def cached_bars(self, ticker: str, start: date, end: date) -> list[tuple[date, float]]:
+        """캐시에 있는 (거래일, 종가)만 날짜순. 네트워크 없이 화면용 (차트)."""
+        rows = self.db.execute(
+            select(PriceBar.day, PriceBar.close)
+            .where(PriceBar.ticker == ticker, PriceBar.day >= start, PriceBar.day <= end)
+            .order_by(PriceBar.day)
+        ).all()
+        return [(day, float(close)) for day, close in rows]
+
     def last_bar(self, ticker: str) -> tuple[date, float] | None:
         """캐시에 있는 마지막 (거래일, 종가). 네트워크 없이 화면 목록용."""
         row = self.db.execute(

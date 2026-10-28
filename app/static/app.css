@@ -82,3 +82,7 @@ a[role="button"].small { padding: .2rem .6rem; font-size: .8rem; }
 .action-form .note { display: block; margin-top: .6rem; }
 .action-form .note input { margin-bottom: 0; }
 .rejudge { margin-top: .6rem; }
+.chart-card { margin: 0 0 1rem; }
+.chart { width: 100%; height: auto; display: block; }
+.chart .axis { font-size: 10px; fill: var(--pico-muted-color); }
+.chart .level { font-size: 10px; }
