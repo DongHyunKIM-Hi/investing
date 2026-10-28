@@ -72,7 +72,7 @@
   {% set rose = po.post_exit_20d is not none and po.post_exit_20d > 0 %}
   <article class="match">
     <header>
-      <strong>{{ past.decided_on }} · {{ past.ticker }}</strong>
+      <strong><a href="/trades/{{ past.id }}">{{ past.decided_on }} · {{ past.ticker }}</a></strong>
       <span class="{{ po.post_exit_20d|tone }} result">판 뒤 {{ po.post_exit_20d|pct }} {{ "껄" if rose else "잘 판" }}</span>
     </header>
     <p class="sim muted">유사도 {{ "%.0f"|format(m.similarity * 100) }}%

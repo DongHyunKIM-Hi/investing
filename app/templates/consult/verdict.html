@@ -75,7 +75,7 @@
   {% set po = past.outcome or {} %}
   <article class="match">
     <header>
-      <strong>{{ past.decided_on }} · {{ past.ticker }}</strong>
+      <strong><a href="/trades/{{ past.id }}">{{ past.decided_on }} · {{ past.ticker }}</a></strong>
       <span class="{{ po.realized_return|tone }} result">{{ po.realized_return|pct }} {{ "수익" if po.win else "손실" }}</span>
     </header>
     <p class="sim muted">유사도 {{ "%.0f"|format(m.similarity * 100) }}%
