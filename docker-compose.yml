@@ -22,6 +22,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://ggeol:ggeol@db:5432/ggeol
+      TZ: Asia/Seoul  # 결정일과 '전 거래일까지' 지표가 서버 날짜를 쓴다. UTC면 미국 장 마감 뒤에도 그날 종가가 다음 날까지 빠짐
     ports:
       - "8000:8000"
     volumes:

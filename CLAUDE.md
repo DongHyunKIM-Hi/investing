@@ -23,11 +23,11 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - `app/taxonomy.py` — 이유·감정 고정 어휘. **key는 유사도 매칭 기준이므로 바꾸지 말 것** (label만 수정 가능)
 - `app/services/importer/` — `csv_parser`(CSV·xlsx→ParsedFill, 위쪽 제목 줄 자동 건너뜀), `presets`(증권사별 매핑·헤더 추측), `fifo`, `pipeline`(DB 저장, 같은 날·종목·방향 체결을 Decision 하나로 묶음. 상담 결정과 연결: 같은 날 수동 체결 → 상담일 전후 3일/+1일 순)
 - `app/services/manual.py` — 상담 뒤 체결 직접 기록(`dedup_key`가 `manual:`로 시작)·삭제. CSV로 같은 날 체결이 들어오면 수동 체결은 CSV로 대체됨
-- `app/services/market/` — `provider`(yfinance), `prices`(DB 캐시), `snapshot`(결정 시점 지표)
+- `app/services/market/` — `provider`(yfinance, 일시 오류 3회 재시도), `prices`(DB 캐시), `snapshot`(결정 시점 지표)
 - `app/services/outcomes.py` — 결과 지표·계획 준수 여부 (순수 함수)
 - `app/services/report.py` — 껄껄껄 리포트: 이유·감정·상황·계획·종목별 성적, 반복 실수 Top 3, 너무 일찍 판 비율 (순수 함수)
 - `app/services/recompute.py` — 티커 단위로 FIFO → context → outcome 재계산, `track_skipped`(보류한 상담 결정의 '샀다면' 결과를 `outcome`에 `status: skipped`로 기록)
-- `app/services/engine/` — 판정 엔진 (전부 순수 함수): `case`(Decision→Case, 매수·매도), `similarity`(유사 전적 Top-K), `verdict`(베타 스무딩 승률·판정·패턴), `checks`(매수 계획·매도 위험 신호), `backtest`(엔진 사후 검증)
+- `app/services/engine/` — 판정 엔진 (전부 순수 함수): `case`(Decision→Case, 매수·매도), `similarity`(유사 전적 Top-K), `verdict`(베타 스무딩 승률·판정·패턴), `checks`(매수 계획·매도 위험 신호), `summary`(판정 화면 맨 위 한 줄 결론: 승률 → 나쁜 패턴 → 급한 경고, `verdict_detail.headline`에 고정), `backtest`(엔진 사후 검증)
   - 매도 Case: 판 뒤 20거래일 동안 안 오르면 win, `ret` = -(판 뒤 20일 수익률), `closed_on` = 그 20거래일째(`post_exit_on`). 그래서 매수와 같은 `decide`를 쓴다
 - `app/services/position.py` — 보유 lot·평단가·평가 손익 (매도 상담 시작 시 context에 저장)
 - `app/services/watch.py` — 보유 종목 계획 점검 (순수 함수): 살 때 남긴 손절가·목표가·기간과 현재가 대조 → `/positions` 화면. 시세는 캐시만 쓰고 '시세 갱신' 버튼으로 받음
@@ -40,7 +40,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 ## 규칙
 - 계산 로직은 DB 없는 순수 함수로 두고 `tests/`에서 단위 테스트
 - 실현 수익률은 실제 체결가·수수료 기준, 기간 비교(SPY 대비·낙폭·매도 후 20일)는 `adj_close` 기준
-- 결정 시점 지표는 **전 거래일까지만** 사용 (당일 종가 미반영, 미래 정보 누출 방지)
+- 결정 시점 지표는 **전 거래일까지만** 사용 (당일 종가 미반영, 미래 정보 누출 방지). '오늘'은 서버 날짜라 컨테이너는 `TZ=Asia/Seoul`로 띄움 (UTC면 미국 장 마감 뒤에도 그날 종가가 다음 날까지 빠짐)
 - 모델 변경 시 `uv run alembic revision --autogenerate -m "..."` 후 생성된 파일 검토
 - 등락 색상은 국내 관례: 상승 빨강(`.up`), 하락 파랑(`.down`)
 - 금액은 `Decimal`(DB `Numeric`), 분석은 pandas float

@@ -1,4 +1,6 @@
 import logging
+import time
+from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Protocol
 
@@ -21,11 +23,30 @@ class MarketDataProvider(Protocol):
 
 
 log = logging.getLogger(__name__)
+RETRIES = 3
+RETRY_WAIT = 1.5  # 초. Yahoo는 잠깐 429·연결 끊김이 잦아 한두 번 더 시도하면 대개 된다
+
+
+def _retry[T](what: str, fn: Callable[[], T]) -> T:
+    for attempt in range(1, RETRIES + 1):
+        try:
+            return fn()
+        except Exception:
+            if attempt == RETRIES:
+                raise
+            log.warning("%s 실패, %d번째 재시도", what, attempt, exc_info=True)
+            time.sleep(RETRY_WAIT * attempt)
+    raise AssertionError("unreachable")
 
 
 class YahooProvider:
     def daily_bars(self, ticker: str, start: date, end: date) -> pd.DataFrame:
-        raw = yf.Ticker(ticker).history(start=start, end=end + timedelta(days=1), auto_adjust=False)
+        raw = _retry(
+            f"{ticker} 시세",
+            lambda: yf.Ticker(ticker).history(
+                start=start, end=end + timedelta(days=1), auto_adjust=False
+            ),
+        )
         if raw.empty:
             return pd.DataFrame(columns=["close", "adj_close", "volume"])
         df = pd.DataFrame(
@@ -48,6 +69,6 @@ class YahooProvider:
         return upcoming[0] if upcoming else None
 
     def splits(self, ticker: str) -> list[tuple[date, float]]:
-        raw = yf.Ticker(ticker).splits
+        raw = _retry(f"{ticker} 분할 이력", lambda: yf.Ticker(ticker).splits)
         days = [ts.date() for ts in pd.DatetimeIndex(raw.index)]
         return [(d, float(r)) for d, r in zip(days, raw.to_numpy(), strict=True) if float(r) > 0]

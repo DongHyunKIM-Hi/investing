@@ -10,6 +10,7 @@
 </hgroup>
 
 <article class="verdict-card {{ d.verdict }}">
+  {% if detail.headline %}<p class="headline">{{ detail.headline }}</p>{% endif %}
   <div class="verdict-head">
     <span class="verdict-badge {{ d.verdict }} big">{{ "매도 " if d.verdict in ("recommend", "against") }}{{ VERDICTS[d.verdict] }}</span>
     <div>

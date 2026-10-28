@@ -8,6 +8,7 @@
 </hgroup>
 
 <article class="verdict-card {{ d.verdict }}">
+  {% if detail.headline %}<p class="headline">{{ detail.headline }}</p>{% endif %}
   <div class="verdict-head">
     <span class="verdict-badge {{ d.verdict }} big">{{ VERDICTS[d.verdict] }}</span>
     <div>

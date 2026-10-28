@@ -30,7 +30,9 @@ async def require_login(request: Request, call_next):
 
 
 # add_middleware는 나중에 등록한 것이 바깥에서 실행된다: 세션이 로그인 검사보다 먼저 풀려야 함
-app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, https_only=False)
+app.add_middleware(
+    SessionMiddleware, secret_key=settings.session_secret, https_only=settings.secure_cookies
+)
 app.mount("/static", StaticFiles(directory=ROOT_DIR / "app" / "static"), name="static")
 app.include_router(auth.router)
 app.include_router(trades.router)

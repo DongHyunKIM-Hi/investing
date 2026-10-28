@@ -16,6 +16,7 @@ from app.models import ConsultMessage, Decision, Fill
 from app.services.engine.case import case_from_decision
 from app.services.engine.checks import Plan, SellPlan, check_plan, check_sell
 from app.services.engine.similarity import find_similar
+from app.services.engine.summary import headline
 from app.services.engine.verdict import decide, patterns
 from app.services.importer.splits import Split, split_factor
 from app.services.llm.consult import (
@@ -168,17 +169,19 @@ def judge(db: Session, d: Decision) -> None:
     else:
         flags = check_plan(plan_of(d), d.context or {}, d.decided_on)
 
+    pats = patterns(query, history)
     d.verdict = verdict.label
     d.win_prob = verdict.win_prob
     d.similar_ids = [m.case.id for m in matches]
     d.verdict_detail = {
         "judged_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "headline": headline(verdict, pats, flags, d.side),
         "history_size": sum(1 for c in history if c.resolved_before(d.decided_on)),
         "verdict": verdict.to_dict(),
         "matches": [
             {"id": m.case.id, "similarity": m.similarity, "parts": dict(m.parts)} for m in matches
         ],
-        "patterns": [p.to_dict() for p in patterns(query, history)],
+        "patterns": [p.to_dict() for p in pats],
         "flags": [asdict(f) for f in flags],
     }
 
