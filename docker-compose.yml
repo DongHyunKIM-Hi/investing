@@ -14,5 +14,27 @@ services:
       interval: 2s
       retries: 15
 
+  # 앱까지 컨테이너로 띄우기: docker compose --profile app up -d --build
+  # (개발 중에는 `docker compose up -d`로 DB만 띄우고 `uv run fastapi dev`를 쓴다)
+  app:
+    build: .
+    profiles: ["app"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://ggeol:ggeol@db:5432/ggeol
+    ports:
+      - "8000:8000"
+    volumes:
+      - appdata:/srv/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      retries: 3
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  appdata:

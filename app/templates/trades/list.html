@@ -8,6 +8,7 @@
   <a href="/trades/import" role="button">CSV 가져오기</a>
   <button class="outline" hx-post="/trades/recompute" hx-target="#recompute" hx-indicator="#recompute-busy">시세·결과 재계산</button>
   <span id="recompute-busy" class="htmx-indicator muted">계산 중…</span>
+  <a href="/trades/export.csv" class="muted" style="margin-left:auto"><small>결정 전체 CSV 내려받기</small></a>
 </div>
 <div id="recompute"></div>
 <form method="get" action="/trades" class="filters">

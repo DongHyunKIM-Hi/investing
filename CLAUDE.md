@@ -7,7 +7,9 @@
 docker compose up -d                 # PostgreSQL 16 (localhost:5432, ggeol/ggeol)
 uv run alembic upgrade head          # 마이그레이션
 uv run fastapi dev app/main.py       # http://localhost:8000 (비밀번호: .env 의 APP_PASSWORD)
+docker compose --profile app up -d --build   # 앱까지 컨테이너로 (Dockerfile, /health 헬스체크)
 ```
+- 사용자용 안내는 `README.md`, 환경 변수 목록은 `.env.example`. 기본 비밀값(APP_PASSWORD·SESSION_SECRET)이면 시작 로그와 로그인 화면에 경고
 - `.env`에 `ANTHROPIC_API_KEY`가 있으면 대화형 상담, 없으면 폼 + 키워드 태그 추천으로 동작
 - IONQ 데모 DB(`ggeol_demo`) 만들기: `scripts/demo_ionq.py` 상단 docstring 참고. `seed`는 DB 이름에 `demo`가 없으면 거부
 
@@ -31,8 +33,9 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - `app/services/watch.py` — 보유 종목 계획 점검 (순수 함수): 살 때 남긴 손절가·목표가·기간과 현재가 대조 → `/positions` 화면. 시세는 캐시만 쓰고 '시세 갱신' 버튼으로 받음
 - `app/services/llm/` — `consult`(Claude 상담: record_decision 도구로 구조화, 매수·매도 도구 따로), `prompts/consult_system.md`·`consult_sell_system.md`(상담 지침), `keywords`(API 키 없을 때 태그 추천)
 - `app/services/consult.py` — 상담 시작(스냅샷, 매도면 보유 현황·살 때 계획) → 대화/폼 기록 → `judge`(같은 쪽 과거 결정과 비교, 판정 결과를 verdict_detail에 고정)
-- `app/routers/` + `app/templates/` — FastAPI + Jinja2 + HTMX (JS 프론트엔드 없음). `/trades/{id}` 결정 상세(체결·결과·태그 수정), `trades/_fills.html`은 판정 화면과 상세 화면이 함께 씀
-- `scripts/recompute.py` — 화면의 '시세·결과 재계산'과 같은 일을 하는 cron용 CLI (보류 건 추적 포함)
+- `app/routers/` + `app/templates/` — FastAPI + Jinja2 + HTMX (JS 프론트엔드 없음). `/trades/{id}` 결정 상세(체결·결과·태그 수정), `trades/_fills.html`은 판정 화면과 상세 화면이 함께 씀. `/trades/export.csv` 결정 전체 내보내기. HTTPException·500은 `error.html`로 렌더
+- `app/services/llm/prompts/` — 상담 지침. 화면이 첫 질문("왜 사려고/팔려고 하세요?")을 고정 멘트로 먼저 보여주므로(`consult/_messages.html`) 프롬프트는 그 답부터 받는 전제. 사용자가 한 번에 다 말하면 첫 턴에 기록, 권유·전망 금지, 어긋남은 숫자로 한 번만 짚기
+- `scripts/recompute.py` — 화면의 '시세·결과 재계산'과 같은 일을 하는 cron용 CLI (보류 건 추적 포함). `scripts/backup.sh` — pg_dump → `data/backups/` 30개 보관
 
 ## 규칙
 - 계산 로직은 DB 없는 순수 함수로 두고 `tests/`에서 단위 테스트
@@ -55,6 +58,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - [x] 4단계: 매도 상담 + 보류 건 추적 + 껄껄껄 리포트 (`/report`)
 - [x] 4단계 보완: 체결 직접 기록(CSV 없이 결과 추적), 결정 상세·태그 수정, 기록 필터, 상담 삭제, 재계산 CLI
 - [x] 보유 현황·계획 점검 (`/positions`): 손절 이탈·목표 도달·기간 초과·계획 없음 알림
+- [x] 런칭 준비: 프롬프트 개정, Dockerfile·compose app 프로필·/health, 에러 화면, 로그인 실패 지연, 기본 비밀값 경고, 첫 사용 안내, README, 결정 CSV 내보내기, 백업 스크립트
 
 ## 알려진 한계
 - 주식 분할은 계산 시 체결을 지금 기준으로 보정함(`importer/splits.py`, 분할 이력은 `price_coverage.splits`에 캐시). 단 상담에서 남긴 목표가·손절가는 보정하지 않으므로 상담 후 분할되면 어긋남

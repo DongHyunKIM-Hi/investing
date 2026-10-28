@@ -1,5 +1,12 @@
+{% set c = d.context or {} %}
 <div id="chat">
-  <div class="bubble assistant">{{ d.ticker }}, 왜 사려고 하세요? 무엇을 보고 사고 싶어졌는지 편하게 말해 주세요.</div>
+  <div class="bubble assistant">
+  {%- if d.side == "sell" -%}
+    {{ d.ticker }}, 왜 팔려고 하세요?{% if c.position_return is not none %} 지금 평단 ${{ "%.2f"|format(c.avg_cost) }} 대비 {{ c.position_return|pct }}예요.{% endif %}{% if c.buy_plan and (c.buy_plan.target_price or c.buy_plan.stop_price) %} 살 때는 {% if c.buy_plan.target_price %}목표가 ${{ "%g"|format(c.buy_plan.target_price) }}{% endif %}{% if c.buy_plan.target_price and c.buy_plan.stop_price %}, {% endif %}{% if c.buy_plan.stop_price %}손절가 ${{ "%g"|format(c.buy_plan.stop_price) }}{% endif %}로 정했었어요.{% endif %} 무엇을 보고 팔고 싶어졌는지 편하게 말해 주세요.
+  {%- else -%}
+    {{ d.ticker }}, 왜 사려고 하세요?{% if c.ret_5d is not none and c.ret_5d >= 0.15 %} 직전 5일에 {{ c.ret_5d|pct }} 올랐네요.{% elif c.from_52w_high is not none and c.from_52w_high <= -0.4 %} 52주 고점 대비 {{ c.from_52w_high|pct }} 자리예요.{% endif %} 무엇을 보고 사고 싶어졌는지, 언제 팔 생각인지 편하게 말해 주세요.
+  {%- endif -%}
+  </div>
   {% for m in messages %}
   <div class="bubble {{ m.role }}">{{ m.text }}</div>
   {% endfor %}

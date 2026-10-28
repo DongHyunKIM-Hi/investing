@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}문제가 생겼어요 · 껄무새 탈출{% endblock %}
+{% block content %}
+<article style="max-width:36rem;margin:3rem auto">
+  {% if status == 404 %}
+  <h3>그런 페이지가 없어요</h3>
+  <p class="muted">주소가 바뀌었거나 지워진 기록일 수 있어요.</p>
+  {% elif status >= 500 %}
+  <h3>처리 중 문제가 생겼어요</h3>
+  <p class="muted">시세 조회(yfinance)나 DB 연결이 잠시 안 될 때 자주 그래요. 잠시 뒤 다시 시도해 보세요. 기록은 중간에 저장되지 않았으니 다시 해도 중복되지 않아요.</p>
+  {% else %}
+  <h3>요청을 처리할 수 없어요</h3>
+  {% endif %}
+  {% if message %}<pre class="error-detail">{{ message }}</pre>{% endif %}
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+    <a href="javascript:history.back()" role="button" class="outline">이전 화면</a>
+    <a href="/consult" role="button" class="outline secondary">상담 홈</a>
+  </div>
+</article>
+{% endblock %}

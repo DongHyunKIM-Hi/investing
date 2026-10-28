@@ -1,10 +1,12 @@
+import csv
+import io
 import secrets
 from datetime import UTC, date, datetime
 from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -62,6 +64,51 @@ def list_trades(request: Request, db: DB, ticker: str = "", side: str = "", stat
             "filter": {"ticker": symbol, "side": side, "status": status},
             "filtered": bool(symbol or side in SIDES or status in STATUSES),
         },
+    )
+
+
+EXPORT_COLUMNS = [
+    "id", "decided_on", "ticker", "side", "source", "user_action", "reason_tags", "emotion",
+    "conviction", "target_price", "stop_price", "horizon_days", "verdict", "win_prob",
+    "status", "realized_return", "mark_return", "excess_return", "holding_days", "max_drawdown",
+    "post_exit_20d", "fwd_20d", "reason_text",
+]  # fmt: skip
+
+
+@router.get("/export.csv")
+def export_decisions(db: DB):
+    """결정 전체를 CSV로. 데이터는 내 것이니 언제든 들고 나갈 수 있어야 한다 (엑셀용 BOM 포함)."""
+    rows = db.scalars(select(Decision).order_by(Decision.decided_on, Decision.id)).all()
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=EXPORT_COLUMNS, extrasaction="ignore")
+    writer.writeheader()
+    for d in rows:
+        o = d.outcome or {}
+        writer.writerow(
+            {
+                "id": d.id,
+                "decided_on": d.decided_on.isoformat(),
+                "ticker": d.ticker,
+                "side": d.side,
+                "source": d.source,
+                "user_action": d.user_action,
+                "reason_tags": "|".join(d.reason_tags or []),
+                "emotion": d.emotion or "",
+                "conviction": d.conviction if d.conviction is not None else "",
+                "target_price": d.target_price if d.target_price is not None else "",
+                "stop_price": d.stop_price if d.stop_price is not None else "",
+                "horizon_days": d.horizon_days if d.horizon_days is not None else "",
+                "verdict": d.verdict or "",
+                "win_prob": d.win_prob if d.win_prob is not None else "",
+                "reason_text": d.reason_text or "",
+                **{k: ("" if o.get(k) is None else o[k]) for k in EXPORT_COLUMNS[14:22]},
+            }
+        )
+    stamp = date.today().isoformat()
+    return PlainTextResponse(
+        "\ufeff" + buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="ggeol-decisions-{stamp}.csv"'},
     )
 
 

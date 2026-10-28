@@ -5,12 +5,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.models import Decision
+from app.models import Decision, Fill
 from app.services.consult import (
     apply_record,
     chat,
@@ -63,11 +63,18 @@ def consult_home(
     recent = db.scalars(
         select(Decision).where(Decision.source == "consult").order_by(Decision.id.desc()).limit(20)
     ).all()
+    fill_count = db.scalar(select(func.count()).select_from(Fill)) or 0
+    untagged = db.scalar(
+        select(func.count()).select_from(Decision).where(Decision.tagged_at.is_(None))
+    )
     return templates.TemplateResponse(
         request,
         "consult/home.html",
         {
             "recent": recent,
+            "fill_count": fill_count,
+            "untagged": untagged or 0,
+            "llm_enabled": _llm() is not None,
             "ticker": ticker,
             "side": side if side in SIDES else "buy",
             "held": held_tickers(db),

@@ -1,5 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
+{% if fill_count == 0 and not recent %}
+<article>
+  <header><strong>처음이시죠? 세 단계면 돼요</strong></header>
+  <ol class="start-steps">
+    <li><a href="/trades/import">증권사 체결내역 CSV를 가져오세요.</a> 과거 매매가 '내 전적'이 돼요. 매수·매도가 모두 들어 있을수록 좋아요.</li>
+    <li><a href="/trades/tagging">그때 왜 샀는지 태깅하세요.</a> 기억나는 만큼만. 이게 있어야 "비슷한 이유로 샀을 때 내 승률"이 나와요.</li>
+    <li>다음 매매부터는 사기 전·팔기 전에 아래에서 상담을 시작하세요. 쓸수록 판정이 정확해져요.</li>
+  </ol>
+  <p class="muted"><small>{% if llm_enabled %}Claude와 대화로 상담해요.{% else %}.env에 ANTHROPIC_API_KEY를 넣으면 Claude와 대화로 상담할 수 있어요. 지금은 폼으로 기록해요.{% endif %}</small></p>
+</article>
+{% elif untagged >= 5 %}
+<p class="muted"><small>이유가 비어 있는 과거 결정이 {{ untagged }}건 있어요. <a href="/trades/tagging">태깅</a>하면 판정에 쓰는 표본이 늘어요.</small></p>
+{% endif %}
 <hgroup>
   <h2>사고팔기 전에, 한 번만</h2>
   <p>어떤 종목을 사거나 팔려고 하세요? 지금 상황을 확인하고 이유와 계획을 기록해요.</p>

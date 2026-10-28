@@ -8,5 +8,6 @@
     {% if error %}<small>{{ error }}</small>{% endif %}
     <button type="submit">들어가기</button>
   </form>
+  {% if insecure %}<p class="flag high"><small>기본 비밀값을 그대로 쓰고 있어요: {{ insecure|join(", ") }}. 외부에서 접속하기 전에 .env에서 바꾸세요.</small></p>{% endif %}
 </article>
 {% endblock %}

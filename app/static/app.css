@@ -71,3 +71,6 @@ button.small { padding: .2rem .6rem; font-size: .8rem; margin: 0; }
 .watch .actions { margin-top: .4rem; }
 .flag.info { border-left-color: #9ca3af; }
 a[role="button"].small { padding: .2rem .6rem; font-size: .8rem; }
+
+.error-detail { white-space: pre-wrap; font-size: .8rem; max-height: 12rem; overflow: auto; }
+.start-steps li { margin: .4rem 0; }
