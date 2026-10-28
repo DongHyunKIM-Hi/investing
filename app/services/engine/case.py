@@ -56,7 +56,9 @@ def case_from_decision(d: "Decision") -> Case:
     plan: str | None = None
     if d.source != "csv":  # 상담에서 만든 결정만 계획(손절가·기간) 여부를 안다
         has_stop = d.stop_price is not None
-        stop = float(d.stop_price) if d.stop_price is not None else None
+        # 손절가는 상담 당시 가격, outcome의 매수가는 분할 보정된 지금 기준 → 같은 기준으로 맞춘다
+        k = o.get("plan_factor") or 1.0
+        stop = float(d.stop_price) / k if d.stop_price is not None else None
         plan = plan_status(o, stop, d.horizon_days)
     return Case(
         id=d.id,

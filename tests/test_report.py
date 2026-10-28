@@ -202,3 +202,40 @@ def test_case_from_decision_sets_followed():
     assert case_from_decision(d("recommend", "skipped", side="sell")).followed is False
     assert case_from_decision(d("caution", "executed")).followed is None
     assert case_from_decision(d("against", "pending")).followed is None
+
+
+def test_case_from_decision_divides_stop_by_split_factor():
+    from decimal import Decimal
+
+    from app.models import Decision
+    from app.services.engine.case import case_from_decision
+
+    # 손절가 $80으로 샀고 그 뒤 2:1 분할 → 보정 후 매수가 50, 손절 40.
+    # 최저점 -20%(=40)는 손절을 깬 게 아니다
+    closed = {
+        "status": "closed",
+        "avg_entry": 50.0,
+        "max_drawdown": -0.2,
+        "holding_days": 5,
+        "closed_on": "2026-03-01",
+        "win": True,
+        "realized_return": 0.1,
+        "plan_factor": 2.0,
+    }
+    d = Decision(
+        id=1,
+        ticker="A",
+        side="buy",
+        source="consult",
+        decided_on=date(2026, 2, 1),
+        reason_tags=[],
+        stop_price=Decimal("80"),
+        outcome=closed,
+        user_action="executed",
+    )
+    assert case_from_decision(d).plan == "kept"
+    d.outcome = {
+        **closed,
+        "plan_factor": 1.0,
+    }  # 보정 없이 80과 비교하면 항상 '어김'으로 잘못 나온다
+    assert case_from_decision(d).plan == "broken"

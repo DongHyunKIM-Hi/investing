@@ -2,7 +2,7 @@
 {% block content %}
 <hgroup>
   <h2>매매 기록</h2>
-  <p>결정 {{ decisions|length }}건{% if untagged %} · <a href="/trades/tagging">이유가 비어 있는 결정 {{ untagged }}건</a>{% endif %}</p>
+  <p>결정 {{ decisions|length }}건{% if untagged %} · <a href="/trades/tagging">이유가 비어 있는 결정 {{ untagged }}건</a>{% endif %}{% if loose %} · <a href="/trades/cleanup">정리할 결정 {{ loose }}건</a>{% endif %}</p>
 </hgroup>
 <div style="display:flex;gap:1rem;align-items:center">
   <a href="/trades/import" role="button">CSV 가져오기</a>

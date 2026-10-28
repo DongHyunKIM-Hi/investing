@@ -46,10 +46,11 @@ def decision_chart(db: Session, d: Decision, prices: PriceService, today: date) 
         for f in fills
     ]
     levels: list[Level] = []
+    k = split_factor(d.decided_on, splits)  # 상담 뒤 분할이 있었으면 계획가도 지금 기준으로
     if d.target_price is not None:
-        levels.append(Level(float(d.target_price), "목표", "target"))
+        levels.append(Level(float(d.target_price / k), "목표", "target"))
     if d.stop_price is not None:
-        levels.append(Level(float(d.stop_price), "손절", "stop"))
+        levels.append(Level(float(d.stop_price / k), "손절", "stop"))
     ctx = d.context or {}
     if d.side == "sell" and ctx.get("avg_cost"):
         levels.append(Level(float(ctx["avg_cost"]), "평단", "avg"))

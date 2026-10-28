@@ -22,6 +22,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - `app/models.py` — Decision(결정: 이유·감정·context·outcome·판정·`action_note`=판정 거스른 이유), ConsultMessage(상담 대화), Fill(체결), LotMatch(FIFO 매칭), PriceBar/PriceCoverage(시세 캐시)
 - `app/taxonomy.py` — 이유·감정 고정 어휘. **key는 유사도 매칭 기준이므로 바꾸지 말 것** (label만 수정 가능)
 - `app/services/importer/` — `csv_parser`(CSV·xlsx→ParsedFill, 위쪽 제목 줄 자동 건너뜀), `presets`(증권사별 매핑·헤더 추측), `fifo`, `pipeline`(DB 저장, 같은 날·종목·방향 체결을 Decision 하나로 묶음. 상담 결정과 연결: 같은 날 수동 체결 → 상담일 전후 3일/+1일 순)
+- `app/services/cleanup.py` — 정리할 결정 찾기 (순수 함수): 판정 전에 멈춘 상담(1일+), 샀다는데 체결 없음(3일+), 실행/보류 미정(1일+). `/trades/cleanup` 화면, 매매 기록 머리에 건수 링크
 - `app/services/manual.py` — 상담 뒤 체결 직접 기록(`dedup_key`가 `manual:`로 시작)·삭제. CSV로 같은 날 체결이 들어오면 수동 체결은 CSV로 대체됨
 - `app/services/market/` — `provider`(yfinance, 일시 오류 3회 재시도), `prices`(DB 캐시), `snapshot`(결정 시점 지표)
 - `app/services/outcomes.py` — 결과 지표·계획 준수 여부 (순수 함수)
@@ -60,12 +61,13 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - [x] 3단계: 유사 전적 매칭 + 승률·판정 (+ 엔진 백테스트 `/backtest`)
 - [x] 4단계: 매도 상담 + 보류 건 추적 + 껄껄껄 리포트 (`/report`)
 - [x] 4단계 보완: 체결 직접 기록(CSV 없이 결과 추적), 결정 상세·태그 수정, 기록 필터, 상담 삭제, 재계산 CLI
-- [ ] 5단계(신뢰 측정, `ROADMAP.md`): [x] 상담 성적표 · [x] 주간 회고 · [x] 판정 거스른 이유 기록 · [x] 결정 상세 미니 차트
+- [x] 5단계(신뢰 측정, `ROADMAP.md`): 상담 성적표, 주간 회고, 판정 거스른 이유 기록, 결정 상세 미니 차트
+- [ ] 6단계(데이터): [x] 정리할 결정 화면 · [x] 분할 뒤 계획가 보정 · [ ] 증권사 프리셋(실제 파일 필요) · [ ] 과거 실적일 지표(소스 필요)
 - [x] 보유 현황·계획 점검 (`/positions`): 손절 이탈·목표 도달·기간 초과·계획 없음 알림
 - [x] 런칭 준비: 프롬프트 개정, Dockerfile·compose app 프로필·/health, 에러 화면, 로그인 실패 지연, 기본 비밀값 경고, 첫 사용 안내, README, 결정 CSV 내보내기, 백업 스크립트
 
 ## 알려진 한계
-- 주식 분할은 계산 시 체결을 지금 기준으로 보정함(`importer/splits.py`, 분할 이력은 `price_coverage.splits`에 캐시). 단 상담에서 남긴 목표가·손절가는 보정하지 않으므로 상담 후 분할되면 어긋남
+- 주식 분할은 계산 시 체결을 지금 기준으로 보정함(`importer/splits.py`, 분할 이력은 `price_coverage.splits`에 캐시). 상담에서 남긴 목표가·손절가는 DB에 상담 당시 값으로 두고, 보유 현황·차트·계획 준수 판정에서 `split_factor(decided_on)`로 나눠 씀(`outcome.plan_factor`). 판정·상세 화면의 계획 숫자는 당시 값 그대로
 - 실적발표일 지표 미구현 (yfinance 과거 실적일 신뢰도 낮음)
 - 증권사 프리셋은 `generic`만 있음 — 토스증권 내보내기 형식은 공개 자료로 확인 못 함. 실제 파일을 받으면 `presets.py`에 추가 (그 전까지는 헤더 추측 + 컬럼 맞추기 화면으로 가져옴)
 - 대화형 상담은 가짜 LLM으로만 흐름 검증됨 (실제 API 키로 프롬프트 품질 미검증 — 2026-10-28 기준 `.env`의 키 값이 비어 있음)

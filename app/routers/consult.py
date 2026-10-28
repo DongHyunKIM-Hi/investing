@@ -156,14 +156,15 @@ def consult_page(
 
 
 @router.post("/consult/{decision_id}/delete")
-def consult_delete(db: DB, decision_id: int):
+def consult_delete(db: DB, decision_id: int, next: Annotated[str, Form()] = ""):
     """잘못 시작했거나 그만둔 상담을 지운다. 실제 체결이 붙은 결정은 매매 기록이므로 못 지운다."""
     d = _get(db, decision_id)
     if d.fills:
         raise HTTPException(400, "체결이 연결된 상담은 지울 수 없어요.")
     db.delete(d)
     db.commit()
-    return RedirectResponse("/consult", status_code=303)
+    back = next if next.startswith("/trades/") else "/consult"
+    return RedirectResponse(back, status_code=303)
 
 
 @router.post("/consult/{decision_id}/chat", response_class=HTMLResponse)
@@ -283,7 +284,11 @@ def consult_rejudge(db: DB, decision_id: int):
 
 @router.post("/consult/{decision_id}/action")
 def consult_action(
-    db: DB, decision_id: int, action: Annotated[str, Form()], note: Annotated[str, Form()] = ""
+    db: DB,
+    decision_id: int,
+    action: Annotated[str, Form()],
+    note: Annotated[str, Form()] = "",
+    next: Annotated[str, Form()] = "",
 ):
     d = _get(db, decision_id)
     if action not in USER_ACTIONS:
@@ -298,6 +303,8 @@ def consult_action(
             d.outcome = None
     db.commit()
     # '샀어요/팔았어요'를 고르면 체결을 바로 적을 수 있게 그 칸으로 내려간다
+    if next.startswith("/trades/"):  # 정리 화면에서 왔으면 그리로
+        return RedirectResponse(next, status_code=303)
     anchor = "#fills" if action == "executed" and not d.fills else ""
     return RedirectResponse(f"/consult/{d.id}{anchor}", status_code=303)
 

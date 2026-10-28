@@ -109,13 +109,14 @@ def holding_of(
     ]
     if planned:
         b = max(planned, key=lambda d: (d.decided_on, d.id))
+        k = split_factor(b.decided_on, splits)  # 상담 뒤 분할이 있었으면 계획가도 지금 기준으로
         pos["buy_plan"] = {
             "decision_id": b.id,
             "decided_on": b.decided_on.isoformat(),
             "reason_tags": [t for t in b.reason_tags if t != "unknown"],
             "reason_text": b.reason_text,
-            "target_price": float(b.target_price) if b.target_price is not None else None,
-            "stop_price": float(b.stop_price) if b.stop_price is not None else None,
+            "target_price": float(b.target_price / k) if b.target_price is not None else None,
+            "stop_price": float(b.stop_price / k) if b.stop_price is not None else None,
             "horizon_days": b.horizon_days,
         }
     return pos

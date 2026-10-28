@@ -14,6 +14,8 @@ from app.config import settings
 from app.db import get_db
 from app.models import Decision, Fill
 from app.services.chart_data import decision_chart
+from app.services.cleanup import find_loose
+from app.services.engine.verdict import VERDICTS
 from app.services.importer.csv_parser import ColumnMapping, parse_fills, read_table
 from app.services.importer.pipeline import import_fills
 from app.services.importer.presets import guess_mapping
@@ -55,12 +57,14 @@ def list_trades(request: Request, db: DB, ticker: str = "", side: str = "", stat
         select(func.count()).select_from(Decision).where(Decision.tagged_at.is_(None))
     )
     tickers = db.scalars(select(Decision.ticker).distinct().order_by(Decision.ticker)).all()
+    loose = find_loose((d for d in decisions if d.source == "consult"), date.today()).count
     return templates.TemplateResponse(
         request,
         "trades/list.html",
         {
             "decisions": decisions,
             "untagged": untagged,
+            "loose": loose,
             "tickers": tickers,
             "filter": {"ticker": symbol, "side": side, "status": status},
             "filtered": bool(symbol or side in SIDES or status in STATUSES),
@@ -74,6 +78,15 @@ EXPORT_COLUMNS = [
     "status", "realized_return", "mark_return", "excess_return", "holding_days", "max_drawdown",
     "post_exit_20d", "fwd_20d", "reason_text", "action_note",
 ]  # fmt: skip
+
+
+@router.get("/cleanup", response_class=HTMLResponse)
+def cleanup_page(request: Request, db: DB, notice: str | None = None):
+    consults = db.scalars(select(Decision).where(Decision.source == "consult")).all()
+    loose = find_loose(consults, date.today())
+    return templates.TemplateResponse(
+        request, "trades/cleanup.html", {"loose": loose, "notice": notice, "VERDICTS": VERDICTS}
+    )
 
 
 @router.get("/export.csv")

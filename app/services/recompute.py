@@ -80,13 +80,17 @@ def _recompute_ticker(db: Session, ticker: str, prices: PriceService) -> list[st
         # 상담 때 저장한 현재가·실적일 같은 항목은 남긴다
         d.context = {**(d.context or {}), **snap} if snap else d.context
         if d.side == "buy":
-            d.outcome = buy_outcome(
-                [lite[i] for i in ids],
-                [leg for leg in legs if leg.buy.id in ids],
-                bars["close"],
-                bars["adj_close"],
-                spy,
-            )
+            d.outcome = {
+                **buy_outcome(
+                    [lite[i] for i in ids],
+                    [leg for leg in legs if leg.buy.id in ids],
+                    bars["close"],
+                    bars["adj_close"],
+                    spy,
+                ),
+                # 결정 뒤 분할 비율. 상담 때 적은 손절가를 지금 기준 가격과 비교할 때 나눈다
+                "plan_factor": float(split_factor(d.decided_on, splits)),
+            }
         else:
             d.outcome = sell_outcome(
                 [lite[i] for i in ids],

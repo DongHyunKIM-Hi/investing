@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}정리할 결정 · 껄무새 탈출{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>정리할 결정</h2>
+  <p>상담은 했는데 뒤처리가 안 된 결정이에요. 그대로 두면 성적표와 리포트가 실제와 달라져요.</p>
+</hgroup>
+{% if notice %}<p class="flag good">{{ notice }}</p>{% endif %}
+{% if loose.count == 0 %}
+<article><p>정리할 결정이 없어요. 깔끔해요.</p><a href="/trades">매매 기록으로</a></article>
+{% endif %}
+
+{% if loose.unlinked %}
+<article>
+  <header><strong>샀다고(팔았다고) 했는데 체결이 없어요</strong> <small class="muted">{{ loose.unlinked|length }}건 · 판정 뒤 3일 넘게 체결이 안 붙음</small></header>
+  <p class="muted"><small>실제로 샀으면 체결가·수량을 적어야 결과가 추적돼요. 안 샀으면 '안 샀음'으로 바꾸면 '샀다면'으로 추적해요.</small></p>
+  <table>
+    <tbody>
+    {% for d in loose.unlinked %}
+    <tr>
+      <td>{{ d.decided_on }}</td>
+      <td><a href="/consult/{{ d.id }}"><strong>{{ d.ticker }}</strong></a> {{ "매수" if d.side == "buy" else "매도" }} <span class="verdict-badge {{ d.verdict }}">{{ VERDICTS[d.verdict] }}</span></td>
+      <td class="actions">
+        <a href="/trades/{{ d.id }}#fills" role="button" class="outline">체결 적기</a>
+        <form method="post" action="/consult/{{ d.id }}/action"><input type="hidden" name="action" value="skipped"><input type="hidden" name="next" value="/trades/cleanup"><button class="outline secondary">{{ "안 샀음" if d.side == "buy" else "안 팔았음" }}</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+
+{% if loose.undecided %}
+<article>
+  <header><strong>판정은 받았는데 실행·보류를 안 골랐어요</strong> <small class="muted">{{ loose.undecided|length }}건</small></header>
+  <table>
+    <tbody>
+    {% for d in loose.undecided %}
+    <tr>
+      <td>{{ d.decided_on }}</td>
+      <td><a href="/consult/{{ d.id }}"><strong>{{ d.ticker }}</strong></a> {{ "매수" if d.side == "buy" else "매도" }} <span class="verdict-badge {{ d.verdict }}">{{ VERDICTS[d.verdict] }}</span></td>
+      <td class="actions">
+        <form method="post" action="/consult/{{ d.id }}/action"><input type="hidden" name="action" value="executed"><input type="hidden" name="next" value="/trades/{{ d.id }}#fills"><button class="outline">{{ "샀어요" if d.side == "buy" else "팔았어요" }}</button></form>
+        <form method="post" action="/consult/{{ d.id }}/action"><input type="hidden" name="action" value="skipped"><input type="hidden" name="next" value="/trades/cleanup"><button class="outline secondary">{{ "안 샀어요" if d.side == "buy" else "안 팔았어요" }}</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+
+{% if loose.unfinished %}
+<article>
+  <header><strong>판정 전에 멈춘 상담</strong> <small class="muted">{{ loose.unfinished|length }}건</small></header>
+  <p class="muted"><small>이어가려면 상담 화면에서 폼으로 기록하면 돼요. 그냥 해 본 거면 지우세요. 성적표에는 안 들어가요.</small></p>
+  <table>
+    <tbody>
+    {% for d in loose.unfinished %}
+    <tr>
+      <td>{{ d.decided_on }}</td>
+      <td><a href="/consult/{{ d.id }}"><strong>{{ d.ticker }}</strong></a> {{ "매수" if d.side == "buy" else "매도" }}{% if d.reason_text %} <small class="muted">{{ d.reason_text[:40] }}</small>{% endif %}</td>
+      <td class="actions">
+        <a href="/consult/{{ d.id }}" role="button" class="outline">이어가기</a>
+        <form method="post" action="/consult/{{ d.id }}/delete"><input type="hidden" name="next" value="/trades/cleanup"><button class="outline secondary">지우기</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+{% endblock %}
