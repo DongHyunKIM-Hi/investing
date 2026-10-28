@@ -19,6 +19,7 @@ from app.services.engine.verdict import VERDICTS
 from app.services.importer.csv_parser import ColumnMapping, parse_fills, read_table
 from app.services.importer.pipeline import import_fills
 from app.services.importer.presets import guess_mapping
+from app.services.jobs import RECOMPUTE, record_run
 from app.services.manual import parse_manual_fill, record_fill, remove_fill
 from app.services.market.prices import PriceService
 from app.services.recompute import recompute_tickers, track_skipped
@@ -223,6 +224,7 @@ def recompute_all(request: Request, db: DB):
     prices = PriceService(db)
     warnings = recompute_tickers(db, tickers, prices)
     warnings += track_skipped(db, prices)
+    record_run(db, RECOMPUTE, warnings)
     db.commit()
     return templates.TemplateResponse(
         request, "trades/_recompute_done.html", {"count": len(tickers), "warnings": warnings}

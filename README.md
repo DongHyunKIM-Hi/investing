@@ -36,6 +36,7 @@ uv run fastapi dev app/main.py  # http://localhost:8000
 uv run python scripts/recompute.py              # 전체 (끝나면 오늘 점검할 보유 종목을 출력)
 uv run python scripts/review.py                 # 지난 7일 회고: 상담·판정 거스른 결정·청산
 sh scripts/backup.sh                            # DB 덤프 → data/backups/ (30개 보관)
+sh scripts/restore.sh data/backups/ggeol-XXXX.sql.gz --yes   # 덤프로 되돌리기 (먼저 현재 상태를 백업함)
 ```
 ```cron
 0 8 * * 2-6  cd /path/to/investing && uv run python scripts/recompute.py >> data/recompute.log 2>&1
@@ -46,6 +47,7 @@ sh scripts/backup.sh                            # DB 덤프 → data/backups/ (3
 ## 컨테이너로 배포
 ```bash
 docker compose --profile app up -d --build      # db + app (http://localhost:8000, /health)
+curl -s localhost:8000/health                   # DB 연결, 마지막 재계산 시각, 사흘 넘게 안 돌았으면 recompute_stale=true
 ```
 외부에서 접속할 거면 앞에 HTTPS 리버스 프록시(Caddy·nginx)를 두고 `.env`의 비밀값을 바꾸세요. 로그인은 비밀번호 하나짜리 세션 인증이라 1인용을 전제로 합니다.
 

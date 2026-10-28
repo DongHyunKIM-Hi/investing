@@ -7,4 +7,4 @@ out="data/backups/ggeol-$(date +%Y%m%d-%H%M).sql.gz"
 docker compose exec -T db pg_dump -U ggeol --clean --if-exists ggeol | gzip > "$out"
 ls -1t data/backups/ggeol-*.sql.gz | tail -n +31 | xargs -r rm --
 echo "백업 완료: $out ($(du -h "$out" | cut -f1))"
-echo "복원: gunzip -c $out | docker compose exec -T db psql -U ggeol ggeol"
+echo "복원: sh scripts/restore.sh $out --yes"

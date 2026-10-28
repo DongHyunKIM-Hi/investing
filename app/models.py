@@ -126,3 +126,15 @@ class PriceCoverage(Base):
     end: Mapped[date] = mapped_column(Date)
     # 주식 분할 이력 [[분할일 ISO, 비율], ...]. 시세를 새로 받을 때 함께 갱신. None이면 아직 모름
     splits: Mapped[list[list[Any]] | None] = mapped_column(JSONB)
+
+
+class JobRun(Base):
+    """재계산 같은 배치 작업의 실행 기록. /health 와 보유 현황에서 '언제 갱신됐나'를 보여 준다."""
+
+    __tablename__ = "job_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(32), index=True)  # recompute | ...
+    ran_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    ok: Mapped[bool] = mapped_column(default=True)
+    message: Mapped[str | None] = mapped_column(Text)  # 경고 요약

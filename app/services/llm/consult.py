@@ -6,6 +6,8 @@ record_decision 도구를 호출하고, 그 입력이 곧 구조화된 결정 �
 thinking 블록은 수정하면 안 되므로 기록은 append-only.
 """
 
+import logging
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +17,8 @@ import anthropic
 from pydantic import BaseModel, Field, ValidationError
 
 from app.taxonomy import BUY_REASONS, EMOTIONS, SELL_REASONS
+
+log = logging.getLogger(__name__)
 
 RECORD_TOOL_NAME = "record_decision"
 MAX_TOKENS = 8000
@@ -290,6 +294,7 @@ class ClaudeConsultLLM:
     def reply(
         self, situation: str, messages: Sequence[Mapping[str, Any]], side: str = "buy"
     ) -> Turn:
+        started = time.monotonic()
         try:
             response = self.client.beta.messages.create(
                 model=self.model,
@@ -318,6 +323,18 @@ class ClaudeConsultLLM:
         except anthropic.APIConnectionError as e:
             raise ConsultError("Claude API에 연결하지 못했습니다. 네트워크를 확인하세요.") from e
 
+        usage = response.usage
+        # 비용·지연 감각용. 캐시 읽기가 0이면 시스템 프롬프트 캐시가 안 먹는 것
+        log.info(
+            "consult llm %s %s: in=%s out=%s cache_read=%s stop=%s %.1fs",
+            self.model,
+            side,
+            usage.input_tokens,
+            usage.output_tokens,
+            getattr(usage, "cache_read_input_tokens", None),
+            response.stop_reason,
+            time.monotonic() - started,
+        )
         if response.stop_reason == "refusal":
             raise ConsultError(
                 "이번 메시지에는 응답을 받지 못했어요. 표현을 바꾸거나 폼으로 입력해 주세요."

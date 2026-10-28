@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -9,6 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import ROOT_DIR, settings
 from app.db import SessionLocal
 from app.routers import auth, consult, positions, report, trades
+from app.services.jobs import RECOMPUTE, is_stale, last_run
 from app.web import templates
 
 logging.basicConfig(level=logging.INFO)
@@ -52,10 +54,17 @@ def health():
     try:
         with SessionLocal() as db:
             db.execute(text("select 1"))
+            last = last_run(db, RECOMPUTE)
     except Exception as e:  # DB가 죽었을 때 503
         log.exception("health check failed")
         return JSONResponse({"ok": False, "db": str(e)}, status_code=503)
-    return {"ok": True}
+    # 재계산이 오래 안 돌았어도 앱은 살아 있으므로 200. 모니터링은 recompute_stale 을 보면 된다
+    return {
+        "ok": True,
+        "last_recompute": last.ran_at.isoformat(timespec="seconds") if last else None,
+        "recompute_ok": last.ok if last else None,
+        "recompute_stale": is_stale(last, datetime.now(UTC)),
+    }
 
 
 @app.exception_handler(HTTPException)

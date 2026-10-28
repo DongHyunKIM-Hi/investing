@@ -19,7 +19,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 ```
 
 ## 구조
-- `app/models.py` — Decision(결정: 이유·감정·context·outcome·판정·`action_note`=판정 거스른 이유), ConsultMessage(상담 대화), Fill(체결), LotMatch(FIFO 매칭), PriceBar/PriceCoverage(시세 캐시)
+- `app/models.py` — Decision(결정: 이유·감정·context·outcome·판정·`action_note`=판정 거스른 이유), ConsultMessage(상담 대화), Fill(체결), LotMatch(FIFO 매칭), PriceBar/PriceCoverage(시세 캐시), JobRun(재계산 마지막 실행 기록, `services/jobs.py`: 화면 버튼·cron 모두 기록, `/health`의 `recompute_stale`과 보유 현황 '마지막 재계산'에 씀)
 - `app/taxonomy.py` — 이유·감정 고정 어휘. **key는 유사도 매칭 기준이므로 바꾸지 말 것** (label만 수정 가능)
 - `app/services/importer/` — `csv_parser`(CSV·xlsx→ParsedFill, 위쪽 제목 줄 자동 건너뜀), `presets`(증권사별 매핑·헤더 추측), `fifo`, `pipeline`(DB 저장, 같은 날·종목·방향 체결을 Decision 하나로 묶음. 상담 결정과 연결: 같은 날 수동 체결 → 상담일 전후 3일/+1일 순)
 - `app/services/cleanup.py` — 정리할 결정 찾기 (순수 함수): 판정 전에 멈춘 상담(1일+), 샀다는데 체결 없음(3일+), 실행/보류 미정(1일+). `/trades/cleanup` 화면, 매매 기록 머리에 건수 링크
@@ -35,11 +35,11 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
   - 매도 Case: 판 뒤 20거래일 동안 안 오르면 win, `ret` = -(판 뒤 20일 수익률), `closed_on` = 그 20거래일째(`post_exit_on`). 그래서 매수와 같은 `decide`를 쓴다
 - `app/services/position.py` — 보유 lot·평단가·평가 손익 (매도 상담 시작 시 context에 저장)
 - `app/services/watch.py` — 보유 종목 계획 점검 (순수 함수): 살 때 남긴 손절가·목표가·기간과 현재가 대조. `holdings.py`가 DB에서 보유 종목을 모아 호출 → `/positions` 화면과 `scripts/recompute.py` 출력이 같이 씀. 시세는 캐시만 쓰고 '시세 갱신' 버튼으로 받음
-- `app/services/llm/` — `consult`(Claude 상담: record_decision 도구로 구조화, 매수·매도 도구 따로), `prompts/consult_system.md`·`consult_sell_system.md`(상담 지침), `keywords`(API 키 없을 때 태그 추천)
+- `app/services/llm/` — `consult`(Claude 상담: record_decision 도구로 구조화, 매수·매도 도구 따로. 호출마다 토큰·캐시 읽기·지연을 INFO 로그로 남김), `prompts/consult_system.md`·`consult_sell_system.md`(상담 지침), `keywords`(API 키 없을 때 태그 추천)
 - `app/services/consult.py` — 상담 시작(스냅샷, 매도면 보유 현황·살 때 계획. 같은 날 같은 종목·방향의 판정 전 상담이 있으면 그걸 이어감) → 대화/폼 기록 → `judge`(같은 쪽 과거 결정과 비교, 판정 결과를 verdict_detail에 고정)
 - `app/routers/` + `app/templates/` — FastAPI + Jinja2 + HTMX (JS 프론트엔드 없음). `/trades/{id}` 결정 상세(체결·결과·태그 수정), `trades/_fills.html`은 판정 화면과 상세 화면이 함께 씀. `/trades/export.csv` 결정 전체 내보내기. HTTPException·500은 `error.html`로 렌더
 - `app/services/llm/prompts/` — 상담 지침. 화면이 첫 질문("왜 사려고/팔려고 하세요?")을 고정 멘트로 먼저 보여주므로(`consult/_messages.html`) 프롬프트는 그 답부터 받는 전제. 사용자가 한 번에 다 말하면 첫 턴에 기록, 권유·전망 금지, 어긋남은 숫자로 한 번만 짚기
-- `scripts/recompute.py` — 화면의 '시세·결과 재계산'과 같은 일을 하는 cron용 CLI (보류 건 추적 + 보유 종목 점검 알림 출력). `scripts/backup.sh` — pg_dump → `data/backups/` 30개 보관. `scripts/tune.py` — 유사도 가중치 후보를 백테스트(Brier·추천-비추천 승률 차)로 비교, 반영은 `similarity.WEIGHTS`를 손으로
+- `scripts/recompute.py` — 화면의 '시세·결과 재계산'과 같은 일을 하는 cron용 CLI (보류 건 추적 + 보유 종목 점검 알림 출력). `scripts/backup.sh` — pg_dump → `data/backups/` 30개 보관, `scripts/restore.sh <덤프> --yes` — 복원(먼저 현재 상태 백업). `scripts/tune.py` — 유사도 가중치 후보를 백테스트(Brier·추천-비추천 승률 차)로 비교, 반영은 `similarity.WEIGHTS`를 손으로
 
 ## 규칙
 - 계산 로직은 DB 없는 순수 함수로 두고 `tests/`에서 단위 테스트
@@ -63,6 +63,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - [x] 4단계 보완: 체결 직접 기록(CSV 없이 결과 추적), 결정 상세·태그 수정, 기록 필터, 상담 삭제, 재계산 CLI
 - [x] 5단계(신뢰 측정, `ROADMAP.md`): 상담 성적표, 주간 회고, 판정 거스른 이유 기록, 결정 상세 미니 차트
 - [ ] 6단계(데이터): [x] 정리할 결정 화면 · [x] 분할 뒤 계획가 보정 · [ ] 증권사 프리셋(실제 파일 필요) · [ ] 과거 실적일 지표(소스 필요)
+- [ ] 8단계(운영): [x] 재계산 실행 기록·/health 신선도 · [x] 복원 스크립트 · [x] LLM 토큰·지연 로그 · [ ] 시세 공급자 교체(대체 공급자 필요)
 - [x] 보유 현황·계획 점검 (`/positions`): 손절 이탈·목표 도달·기간 초과·계획 없음 알림
 - [x] 런칭 준비: 프롬프트 개정, Dockerfile·compose app 프로필·/health, 에러 화면, 로그인 실패 지연, 기본 비밀값 경고, 첫 사용 안내, README, 결정 CSV 내보내기, 백업 스크립트
 

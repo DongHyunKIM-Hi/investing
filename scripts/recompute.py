@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT))
 from app.db import SessionLocal  # noqa: E402
 from app.models import Fill  # noqa: E402
 from app.services.holdings import watches  # noqa: E402
+from app.services.jobs import RECOMPUTE, record_run  # noqa: E402
 from app.services.market.prices import PriceService  # noqa: E402
 from app.services.recompute import recompute_tickers, track_skipped  # noqa: E402
 
@@ -37,6 +38,7 @@ def main(only: list[str]) -> int:
         prices = PriceService(db)
         warnings = recompute_tickers(db, tickers, prices)
         warnings += track_skipped(db, prices)
+        record_run(db, RECOMPUTE, warnings)
         db.commit()
         todo = [w for w in watches(db, prices, datetime.now().date()) if w.urgency <= URGENT]
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
