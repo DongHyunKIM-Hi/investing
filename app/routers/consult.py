@@ -29,6 +29,7 @@ from app.services.llm.keywords import suggest_tags
 from app.services.market.prices import PriceService
 from app.services.recompute import track_skipped
 from app.services.scorecard import ACTIONS, build_scorecard, judged_from_decision
+from app.services.weekly import weekly_review
 from app.web import templates
 
 router = APIRouter()
@@ -81,6 +82,7 @@ def consult_home(
             "ticker": ticker,
             "side": side if side in SIDES else "buy",
             "held": held_tickers(db),
+            "review": weekly_review(db, PriceService(db), date.today()),
             "error": error,
             "VERDICTS": VERDICTS,
         },

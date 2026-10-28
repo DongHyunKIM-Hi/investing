@@ -4,6 +4,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Undefined
 
 from app.config import ROOT_DIR
+from app.services.review import override_text
 from app.taxonomy import BUY_REASONS, EMOTIONS, SELL_REASONS, reasons_for
 
 
@@ -30,5 +31,6 @@ templates.env.globals.update(
     SELL_REASONS=SELL_REASONS,
     EMOTIONS=EMOTIONS,
     reasons_for=reasons_for,
+    override_text=override_text,
     today=date.today,
 )

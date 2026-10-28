@@ -32,12 +32,14 @@ uv run fastapi dev app/main.py  # http://localhost:8000
 미국 장 마감 뒤 시세를 받아 결과·보류 건 추적을 갱신합니다. 화면의 '시세·결과 재계산' 버튼과 같습니다.
 
 ```bash
-uv run python scripts/recompute.py              # 전체
+uv run python scripts/recompute.py              # 전체 (끝나면 오늘 점검할 보유 종목을 출력)
+uv run python scripts/review.py                 # 지난 7일 회고: 상담·판정 거스른 결정·청산
 sh scripts/backup.sh                            # DB 덤프 → data/backups/ (30개 보관)
 ```
 ```cron
 0 8 * * 2-6  cd /path/to/investing && uv run python scripts/recompute.py >> data/recompute.log 2>&1
 30 8 * * *   cd /path/to/investing && sh scripts/backup.sh >> data/backup.log 2>&1
+45 8 * * 1   cd /path/to/investing && uv run python scripts/review.py
 ```
 
 ## 컨테이너로 배포

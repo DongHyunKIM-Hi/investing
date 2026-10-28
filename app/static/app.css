@@ -75,3 +75,7 @@ a[role="button"].small { padding: .2rem .6rem; font-size: .8rem; }
 .error-detail { white-space: pre-wrap; font-size: .8rem; max-height: 12rem; overflow: auto; }
 .start-steps li { margin: .4rem 0; }
 .verdict-card .headline { font-size: 1.05rem; line-height: 1.5; margin-bottom: 1rem; padding-bottom: .8rem; border-bottom: 1px solid var(--pico-muted-border-color); }
+
+.review ul { margin-bottom: 0; }
+.review li.override { font-weight: 600; }
+.review .verdict-badge { font-size: .75rem; padding: 0 .4rem; }

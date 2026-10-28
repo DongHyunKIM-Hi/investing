@@ -37,6 +37,33 @@
 </div>
 {% endif %}
 
+{% if not review.empty %}
+<article class="review">
+  <header><strong>지난 7일</strong> <small class="muted">{{ review.since }} ~ {{ review.until }}</small></header>
+  <ul>
+    {% if review.consults %}
+    <li>상담 {{ review.consults|length }}건:
+      {% for k, n in review.by_verdict.items() if n %}<span class="verdict-badge {{ k }}">{{ VERDICTS[k] }} {{ n }}</span> {% endfor %}
+      <small class="muted">{% for k, n in review.by_action.items() if n %}{{ {"executed": "실행", "skipped": "보류", "pending": "미정"}[k] }} {{ n }}{{ " · " if not loop.last }}{% endfor %}</small>
+    </li>
+    {% endif %}
+    {% for j in review.overrides %}
+    <li class="override"><a href="/consult/{{ j.id }}"><strong>{{ j.ticker }}</strong></a> {{ j.decided_on }}: {{ override_text(j) }}
+      {% if j.result is not none %}<span class="{{ j.result|tone }}">{{ j.result|pct }}</span>{% endif %}</li>
+    {% endfor %}
+    {% if review.closed %}
+    {% set s = review.closed_stats %}
+    <li>청산 {{ s.n }}건: 수익 {{ s.wins }}건, 중앙값 <span class="{{ s.median_return|tone }}">{{ s.median_return|pct }}</span>
+      <small class="muted">{% for c in review.closed[:5] %}<a href="/trades/{{ c.id }}">{{ c.ticker }}</a> <span class="{{ c.ret|tone }}">{{ c.ret|pct }}</span>{{ " · " if not loop.last }}{% endfor %}</small></li>
+    {% endif %}
+    {% if review.alerts %}
+    <li><a href="/positions">점검할 보유 종목 {{ review.alerts|length }}개</a>:
+      {% for w in review.alerts %}<strong>{{ w.ticker }}</strong> <span class="{{ w.position_return|tone }}">{{ w.position_return|pct }}</span>{{ ", " if not loop.last }}{% endfor %}</li>
+    {% endif %}
+  </ul>
+</article>
+{% endif %}
+
 {% if recent %}
 <h4>최근 상담</h4>
 <div class="overflow-auto">

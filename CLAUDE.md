@@ -26,6 +26,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - `app/services/market/` — `provider`(yfinance, 일시 오류 3회 재시도), `prices`(DB 캐시), `snapshot`(결정 시점 지표)
 - `app/services/outcomes.py` — 결과 지표·계획 준수 여부 (순수 함수)
 - `app/services/scorecard.py` — 상담 성적표 (`/backtest` 상단, 순수 함수): 상담 당시 판정(verdict, 고정값) vs 실제 결과·'샀다면' 결과, 판정 적중률, 판정을 따른 비율, Brier. 엔진 백테스트와 달리 '그때 화면에 떴던 판정'을 채점
+- `app/services/review.py` — 주간 회고 (순수 함수): 지난 7일 상담·판정 거스른 결정·청산·점검 알림. `weekly.py`가 DB에서 재료를 모아 홈 카드와 `scripts/review.py`(월요일 cron 메일용)가 같이 씀
 - `app/services/report.py` — 껄껄껄 리포트: 이유·감정·상황·계획·종목별 성적, 반복 실수 Top 3, 너무 일찍 판 비율 (순수 함수)
 - `app/services/recompute.py` — 티커 단위로 FIFO → context → outcome 재계산, `track_skipped`(보류한 상담 결정의 '샀다면' 결과를 `outcome`에 `status: skipped`로 기록)
 - `app/services/engine/` — 판정 엔진 (전부 순수 함수): `case`(Decision→Case, 매수·매도), `similarity`(유사 전적 Top-K), `verdict`(베타 스무딩 승률·판정·패턴), `checks`(매수 계획·매도 위험 신호), `summary`(판정 화면 맨 위 한 줄 결론: 승률 → 나쁜 패턴 → 급한 경고, `verdict_detail.headline`에 고정), `backtest`(엔진 사후 검증)
@@ -58,7 +59,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - [x] 3단계: 유사 전적 매칭 + 승률·판정 (+ 엔진 백테스트 `/backtest`)
 - [x] 4단계: 매도 상담 + 보류 건 추적 + 껄껄껄 리포트 (`/report`)
 - [x] 4단계 보완: 체결 직접 기록(CSV 없이 결과 추적), 결정 상세·태그 수정, 기록 필터, 상담 삭제, 재계산 CLI
-- [ ] 5단계(신뢰 측정, `ROADMAP.md`): [x] 상담 성적표 · [ ] 주간 회고 · [ ] 판정 거스른 이유 기록 · [ ] 결정 상세 미니 차트
+- [ ] 5단계(신뢰 측정, `ROADMAP.md`): [x] 상담 성적표 · [x] 주간 회고 · [ ] 판정 거스른 이유 기록 · [ ] 결정 상세 미니 차트
 - [x] 보유 현황·계획 점검 (`/positions`): 손절 이탈·목표 도달·기간 초과·계획 없음 알림
 - [x] 런칭 준비: 프롬프트 개정, Dockerfile·compose app 프로필·/health, 에러 화면, 로그인 실패 지연, 기본 비밀값 경고, 첫 사용 안내, README, 결정 CSV 내보내기, 백업 스크립트
 
