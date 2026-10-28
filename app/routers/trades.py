@@ -71,7 +71,7 @@ EXPORT_COLUMNS = [
     "id", "decided_on", "ticker", "side", "source", "user_action", "reason_tags", "emotion",
     "conviction", "target_price", "stop_price", "horizon_days", "verdict", "win_prob",
     "status", "realized_return", "mark_return", "excess_return", "holding_days", "max_drawdown",
-    "post_exit_20d", "fwd_20d", "reason_text",
+    "post_exit_20d", "fwd_20d", "reason_text", "action_note",
 ]  # fmt: skip
 
 
@@ -101,6 +101,7 @@ def export_decisions(db: DB):
                 "verdict": d.verdict or "",
                 "win_prob": d.win_prob if d.win_prob is not None else "",
                 "reason_text": d.reason_text or "",
+                "action_note": d.action_note or "",
                 **{k: ("" if o.get(k) is None else o[k]) for k in EXPORT_COLUMNS[14:22]},
             }
         )

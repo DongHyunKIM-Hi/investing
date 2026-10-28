@@ -39,6 +39,8 @@ class Case:
     holding_days: int | None = None
     plan: str | None = None  # kept | broken | none. CSV에서 온 결정이나 청산 전이면 None
     side: str = "buy"
+    # 상담 판정을 따랐나. 추천→실행, 비추천→보류만 따진다. 그 외(신중·CSV·미정)는 None
+    followed: bool | None = None
 
     def resolved_before(self, day: date) -> bool:
         """day 시점에 이미 승패가 확정돼 있었는가."""
@@ -72,11 +74,18 @@ def case_from_decision(d: "Decision") -> Case:
         post_exit_20d=o.get("post_exit_20d") if closed else None,
         holding_days=o.get("holding_days") if closed else None,
         plan=plan,
+        followed=_followed(d),
     )
 
 
 def _tags(d: "Decision") -> frozenset[str]:
     return frozenset(t for t in d.reason_tags or [] if t != UNKNOWN)
+
+
+def _followed(d: "Decision") -> bool | None:
+    if d.verdict not in ("recommend", "against") or d.user_action not in ("executed", "skipped"):
+        return None
+    return (d.verdict == "recommend") == (d.user_action == "executed")
 
 
 def sell_case_from_decision(d: "Decision") -> Case:
@@ -106,4 +115,5 @@ def sell_case_from_decision(d: "Decision") -> Case:
         post_exit_20d=post,
         holding_days=o.get("holding_days"),
         side="sell",
+        followed=_followed(d),
     )

@@ -38,7 +38,7 @@ ul.patterns li { list-style: none; margin: .3rem 0; }
 .match p { margin-bottom: .4rem; }
 .sim { font-size: .8rem; }
 .actions { display: flex; gap: .6rem; flex-wrap: wrap; }
-.actions form { margin: 0; }
+.actions form, .actions button { margin: 0; width: auto; }
 
 /* 리포트 */
 .bar { display: inline-block; width: 4rem; height: .5rem; margin-right: .4rem; border-radius: 999px;
@@ -79,3 +79,6 @@ a[role="button"].small { padding: .2rem .6rem; font-size: .8rem; }
 .review ul { margin-bottom: 0; }
 .review li.override { font-weight: 600; }
 .review .verdict-badge { font-size: .75rem; padding: 0 .4rem; }
+.action-form .note { display: block; margin-top: .6rem; }
+.action-form .note input { margin-bottom: 0; }
+.rejudge { margin-top: .6rem; }

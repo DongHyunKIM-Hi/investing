@@ -36,6 +36,7 @@ router = APIRouter()
 DB = Annotated[Session, Depends(get_db)]
 TICKER = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
 USER_ACTIONS = {"executed", "skipped", "pending"}
+NOTE_MAX = 300  # 판정을 거스른 이유 한 줄
 SIDES = {"buy", "sell"}
 
 
@@ -279,10 +280,13 @@ def consult_rejudge(db: DB, decision_id: int):
 
 
 @router.post("/consult/{decision_id}/action")
-def consult_action(db: DB, decision_id: int, action: Annotated[str, Form()]):
+def consult_action(
+    db: DB, decision_id: int, action: Annotated[str, Form()], note: Annotated[str, Form()] = ""
+):
     d = _get(db, decision_id)
     if action not in USER_ACTIONS:
         raise HTTPException(400)
+    d.action_note = note.strip()[:NOTE_MAX] or None
     if not d.fills:  # CSV로 실제 체결이 연결된 뒤에는 '샀음'이 사실이므로 바꾸지 않는다
         d.user_action = action
         if action == "skipped":

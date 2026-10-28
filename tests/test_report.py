@@ -20,6 +20,7 @@ def case(
     post: float | None = None,
     plan: str | None = None,
     ticker: str = "IONQ",
+    followed: bool | None = None,
 ) -> Case:
     opened = TODAY - timedelta(days=200 - id)
     closed = ret is not None
@@ -36,6 +37,7 @@ def case(
         post_exit_20d=post,
         holding_days=held if closed else None,
         plan=plan,
+        followed=followed,
     )
 
 
@@ -171,3 +173,32 @@ def test_skip_groups_by_verdict():
     assert (against.n, against.good, against.tracking) == (3, 2, 1)
     assert against.good_rate == pytest.approx(2 / 3)
     assert [s.id for s in r.recent_skips] == [5, 4, 3, 2, 1]
+
+
+def test_overriding_verdict_is_a_mistake_but_following_is_not():
+    overrode = [case(i, -0.2, followed=False) for i in range(1, 5)]
+    followed = [case(i, -0.2, followed=True) for i in range(5, 9)]
+    unknown = [case(9, 0.1)]
+    r = build_report([*overrode, *followed, *unknown])
+    assert [(p.key, p.stats.n) for p in r.by_follow] == [("followed", 4), ("overrode", 4)]
+    keys = [p.key for p in r.mistakes]
+    assert "overrode" in keys and "followed" not in keys
+    by_key = {p.key: p for p in r.mistakes}
+    assert by_key["overrode"].sentence.startswith("판정을 거스른 매매 4건 중 0건 수익")
+
+
+def test_case_from_decision_sets_followed():
+    from app.models import Decision
+    from app.services.engine.case import case_from_decision
+
+    def d(verdict, action, side="buy"):
+        return Decision(
+            id=1, ticker="A", side=side, source="consult", decided_on=TODAY, reason_tags=[],
+            verdict=verdict, user_action=action,
+        )  # fmt: skip
+
+    assert case_from_decision(d("against", "executed")).followed is False
+    assert case_from_decision(d("recommend", "executed")).followed is True
+    assert case_from_decision(d("recommend", "skipped", side="sell")).followed is False
+    assert case_from_decision(d("caution", "executed")).followed is None
+    assert case_from_decision(d("against", "pending")).followed is None

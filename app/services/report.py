@@ -31,6 +31,10 @@ PLAN_LABELS: dict[str, str] = {
     "broken": "계획을 어긴",
     "none": "계획 없이 산",
 }
+FOLLOW_LABELS: dict[str, str] = {
+    "followed": "판정대로 한",
+    "overrode": "판정을 거스른",
+}
 MISTAKES_TOP = 3
 EARLY_EXITS_TOP = 5
 TICKERS_TOP = 10
@@ -173,6 +177,7 @@ class Report:
     by_situation: list[Pattern]
     by_ticker: list[Pattern]
     by_plan: list[Pattern]
+    by_follow: list[Pattern]  # 추천·비추천을 따랐나 (상담 후 체결된 매수만)
     mistakes: list[Pattern]
     early_exits: EarlyExits
     holding: Holding
@@ -213,7 +218,8 @@ def find_mistakes(groups: Iterable[Pattern], top: int = MISTAKES_TOP) -> list[Pa
         if p.stats.n >= MIN_SAMPLES
         and (p.stats.median_return or 0) < 0
         and _badness(p) < 0.5
-        and not (p.kind == "plan" and p.key == "kept")
+        # 계획대로·판정대로 했는데 진 건 습관이 아니라 계획·엔진의 문제
+        and not (p.kind == "plan" and p.key in ("kept", "followed"))
     ]
     bad.sort(key=lambda p: (_badness(p), p.stats.median_return or 0))
     return bad[:top]
@@ -293,6 +299,9 @@ def build_report(
     )
     by_ticker = sorted(by_ticker, key=lambda p: -p.stats.n)[:TICKERS_TOP]
     by_plan = _groups("plan", PLAN_LABELS.items(), lambda k, c: c.plan == k, closed)
+    by_follow = _groups(
+        "plan", FOLLOW_LABELS.items(), lambda k, c: c.followed == (k == "followed"), closed
+    )
 
     return Report(
         overall=stats(closed),
@@ -304,7 +313,10 @@ def build_report(
         by_situation=by_situation,
         by_ticker=by_ticker,
         by_plan=by_plan,
-        mistakes=find_mistakes([*by_tag, *by_emotion, *by_situation, *by_ticker, *by_plan]),
+        by_follow=by_follow,
+        mistakes=find_mistakes(
+            [*by_tag, *by_emotion, *by_situation, *by_ticker, *by_plan, *by_follow]
+        ),
         early_exits=early_exits(closed),
         holding=holding(closed),
         sells=sell_groups(sells),

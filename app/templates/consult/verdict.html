@@ -100,15 +100,23 @@
 <article>
   <header><strong>그래서, 어떻게 하실 건가요?</strong> <small class="muted">안 산 것도 기록해 두면 나중에 '참은 게 잘한 건지' 알 수 있어요</small></header>
   {% set labels = {"executed": "샀어요", "skipped": "안 살래요", "pending": "고민 중"} %}
-  <div class="actions">
-  {% for key, label in labels.items() %}
-    <form method="post" action="/consult/{{ d.id }}/action">
-      <input type="hidden" name="action" value="{{ key }}">
-      <button class="{{ '' if d.user_action == key else 'outline secondary' }}" {% if d.fills %}disabled{% endif %}>{{ label }}</button>
-    </form>
-  {% endfor %}
-    <form method="post" action="/consult/{{ d.id }}/rejudge"><button class="outline">최신 기록으로 다시 판정</button></form>
-  </div>
+  <form method="post" action="/consult/{{ d.id }}/action" class="action-form">
+    <div class="actions">
+    {% for key, label in labels.items() %}
+      <button name="action" value="{{ key }}" class="{{ '' if d.user_action == key else 'outline secondary' }}" {% if d.fills %}disabled{% endif %}>{{ label }}</button>
+    {% endfor %}
+    </div>
+    {% if d.verdict in ("recommend", "against") %}
+    <label class="note">
+      <small class="muted">판정과 다르게 결정한다면, 왜인지 한 줄 (선택). 나중에 '판정을 거스른 매매'의 성적과 함께 보여요.</small>
+      <input name="note" maxlength="300" value="{{ d.action_note or '' }}" placeholder="예: 실적 발표 전이라 일단 들어감" {% if d.fills %}disabled{% endif %}>
+    </label>
+    {% elif d.action_note %}
+    <input type="hidden" name="note" value="{{ d.action_note }}">
+    {% endif %}
+  </form>
+  {% if d.action_note %}<p class="ctx"><strong>내 메모:</strong> {{ d.action_note }}</p>{% endif %}
+  <form method="post" action="/consult/{{ d.id }}/rejudge" class="rejudge"><button class="outline">최신 기록으로 다시 판정</button></form>
   {% if d.fills %}<small class="muted">체결 {{ d.fills|length }}건이 이 상담에 연결돼 있어요 (아래 '실제 체결' 참고).</small>{% endif %}
   {% set so = d.outcome or {} %}
   {% if d.user_action == "skipped" and so.status == "skipped" %}

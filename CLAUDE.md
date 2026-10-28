@@ -19,7 +19,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 ```
 
 ## 구조
-- `app/models.py` — Decision(결정: 이유·감정·context·outcome·판정), ConsultMessage(상담 대화), Fill(체결), LotMatch(FIFO 매칭), PriceBar/PriceCoverage(시세 캐시)
+- `app/models.py` — Decision(결정: 이유·감정·context·outcome·판정·`action_note`=판정 거스른 이유), ConsultMessage(상담 대화), Fill(체결), LotMatch(FIFO 매칭), PriceBar/PriceCoverage(시세 캐시)
 - `app/taxonomy.py` — 이유·감정 고정 어휘. **key는 유사도 매칭 기준이므로 바꾸지 말 것** (label만 수정 가능)
 - `app/services/importer/` — `csv_parser`(CSV·xlsx→ParsedFill, 위쪽 제목 줄 자동 건너뜀), `presets`(증권사별 매핑·헤더 추측), `fifo`, `pipeline`(DB 저장, 같은 날·종목·방향 체결을 Decision 하나로 묶음. 상담 결정과 연결: 같은 날 수동 체결 → 상담일 전후 3일/+1일 순)
 - `app/services/manual.py` — 상담 뒤 체결 직접 기록(`dedup_key`가 `manual:`로 시작)·삭제. CSV로 같은 날 체결이 들어오면 수동 체결은 CSV로 대체됨
@@ -29,7 +29,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - `app/services/review.py` — 주간 회고 (순수 함수): 지난 7일 상담·판정 거스른 결정·청산·점검 알림. `weekly.py`가 DB에서 재료를 모아 홈 카드와 `scripts/review.py`(월요일 cron 메일용)가 같이 씀
 - `app/services/report.py` — 껄껄껄 리포트: 이유·감정·상황·계획·종목별 성적, 반복 실수 Top 3, 너무 일찍 판 비율 (순수 함수)
 - `app/services/recompute.py` — 티커 단위로 FIFO → context → outcome 재계산, `track_skipped`(보류한 상담 결정의 '샀다면' 결과를 `outcome`에 `status: skipped`로 기록)
-- `app/services/engine/` — 판정 엔진 (전부 순수 함수): `case`(Decision→Case, 매수·매도), `similarity`(유사 전적 Top-K), `verdict`(베타 스무딩 승률·판정·패턴), `checks`(매수 계획·매도 위험 신호), `summary`(판정 화면 맨 위 한 줄 결론: 승률 → 나쁜 패턴 → 급한 경고, `verdict_detail.headline`에 고정), `backtest`(엔진 사후 검증)
+- `app/services/engine/` — 판정 엔진 (전부 순수 함수): `case`(Decision→Case, 매수·매도, `followed`=추천·비추천을 따랐나), `similarity`(유사 전적 Top-K), `verdict`(베타 스무딩 승률·판정·패턴), `checks`(매수 계획·매도 위험 신호), `summary`(판정 화면 맨 위 한 줄 결론: 승률 → 나쁜 패턴 → 급한 경고, `verdict_detail.headline`에 고정), `backtest`(엔진 사후 검증)
   - 매도 Case: 판 뒤 20거래일 동안 안 오르면 win, `ret` = -(판 뒤 20일 수익률), `closed_on` = 그 20거래일째(`post_exit_on`). 그래서 매수와 같은 `decide`를 쓴다
 - `app/services/position.py` — 보유 lot·평단가·평가 손익 (매도 상담 시작 시 context에 저장)
 - `app/services/watch.py` — 보유 종목 계획 점검 (순수 함수): 살 때 남긴 손절가·목표가·기간과 현재가 대조. `holdings.py`가 DB에서 보유 종목을 모아 호출 → `/positions` 화면과 `scripts/recompute.py` 출력이 같이 씀. 시세는 캐시만 쓰고 '시세 갱신' 버튼으로 받음
@@ -59,7 +59,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - [x] 3단계: 유사 전적 매칭 + 승률·판정 (+ 엔진 백테스트 `/backtest`)
 - [x] 4단계: 매도 상담 + 보류 건 추적 + 껄껄껄 리포트 (`/report`)
 - [x] 4단계 보완: 체결 직접 기록(CSV 없이 결과 추적), 결정 상세·태그 수정, 기록 필터, 상담 삭제, 재계산 CLI
-- [ ] 5단계(신뢰 측정, `ROADMAP.md`): [x] 상담 성적표 · [x] 주간 회고 · [ ] 판정 거스른 이유 기록 · [ ] 결정 상세 미니 차트
+- [ ] 5단계(신뢰 측정, `ROADMAP.md`): [x] 상담 성적표 · [x] 주간 회고 · [x] 판정 거스른 이유 기록 · [ ] 결정 상세 미니 차트
 - [x] 보유 현황·계획 점검 (`/positions`): 손절 이탈·목표 도달·기간 초과·계획 없음 알림
 - [x] 런칭 준비: 프롬프트 개정, Dockerfile·compose app 프로필·/health, 에러 화면, 로그인 실패 지연, 기본 비밀값 경고, 첫 사용 안내, README, 결정 CSV 내보내기, 백업 스크립트
 

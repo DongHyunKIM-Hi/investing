@@ -43,6 +43,8 @@ class Decision(Base):
     user_action: Mapped[str] = mapped_column(
         String(16), default="executed"
     )  # executed|skipped|pending
+    # 판정과 다르게(비추천인데 삼, 추천인데 안 삼) 결정했을 때 남긴 한 줄 이유
+    action_note: Mapped[str | None] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
