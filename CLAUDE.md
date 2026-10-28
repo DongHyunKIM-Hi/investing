@@ -30,12 +30,12 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - `app/services/engine/` — 판정 엔진 (전부 순수 함수): `case`(Decision→Case, 매수·매도), `similarity`(유사 전적 Top-K), `verdict`(베타 스무딩 승률·판정·패턴), `checks`(매수 계획·매도 위험 신호), `summary`(판정 화면 맨 위 한 줄 결론: 승률 → 나쁜 패턴 → 급한 경고, `verdict_detail.headline`에 고정), `backtest`(엔진 사후 검증)
   - 매도 Case: 판 뒤 20거래일 동안 안 오르면 win, `ret` = -(판 뒤 20일 수익률), `closed_on` = 그 20거래일째(`post_exit_on`). 그래서 매수와 같은 `decide`를 쓴다
 - `app/services/position.py` — 보유 lot·평단가·평가 손익 (매도 상담 시작 시 context에 저장)
-- `app/services/watch.py` — 보유 종목 계획 점검 (순수 함수): 살 때 남긴 손절가·목표가·기간과 현재가 대조 → `/positions` 화면. 시세는 캐시만 쓰고 '시세 갱신' 버튼으로 받음
+- `app/services/watch.py` — 보유 종목 계획 점검 (순수 함수): 살 때 남긴 손절가·목표가·기간과 현재가 대조. `holdings.py`가 DB에서 보유 종목을 모아 호출 → `/positions` 화면과 `scripts/recompute.py` 출력이 같이 씀. 시세는 캐시만 쓰고 '시세 갱신' 버튼으로 받음
 - `app/services/llm/` — `consult`(Claude 상담: record_decision 도구로 구조화, 매수·매도 도구 따로), `prompts/consult_system.md`·`consult_sell_system.md`(상담 지침), `keywords`(API 키 없을 때 태그 추천)
-- `app/services/consult.py` — 상담 시작(스냅샷, 매도면 보유 현황·살 때 계획) → 대화/폼 기록 → `judge`(같은 쪽 과거 결정과 비교, 판정 결과를 verdict_detail에 고정)
+- `app/services/consult.py` — 상담 시작(스냅샷, 매도면 보유 현황·살 때 계획. 같은 날 같은 종목·방향의 판정 전 상담이 있으면 그걸 이어감) → 대화/폼 기록 → `judge`(같은 쪽 과거 결정과 비교, 판정 결과를 verdict_detail에 고정)
 - `app/routers/` + `app/templates/` — FastAPI + Jinja2 + HTMX (JS 프론트엔드 없음). `/trades/{id}` 결정 상세(체결·결과·태그 수정), `trades/_fills.html`은 판정 화면과 상세 화면이 함께 씀. `/trades/export.csv` 결정 전체 내보내기. HTTPException·500은 `error.html`로 렌더
 - `app/services/llm/prompts/` — 상담 지침. 화면이 첫 질문("왜 사려고/팔려고 하세요?")을 고정 멘트로 먼저 보여주므로(`consult/_messages.html`) 프롬프트는 그 답부터 받는 전제. 사용자가 한 번에 다 말하면 첫 턴에 기록, 권유·전망 금지, 어긋남은 숫자로 한 번만 짚기
-- `scripts/recompute.py` — 화면의 '시세·결과 재계산'과 같은 일을 하는 cron용 CLI (보류 건 추적 포함). `scripts/backup.sh` — pg_dump → `data/backups/` 30개 보관
+- `scripts/recompute.py` — 화면의 '시세·결과 재계산'과 같은 일을 하는 cron용 CLI (보류 건 추적 + 보유 종목 점검 알림 출력). `scripts/backup.sh` — pg_dump → `data/backups/` 30개 보관. `scripts/tune.py` — 유사도 가중치 후보를 백테스트(Brier·추천-비추천 승률 차)로 비교, 반영은 `similarity.WEIGHTS`를 손으로
 
 ## 규칙
 - 계산 로직은 DB 없는 순수 함수로 두고 `tests/`에서 단위 테스트
@@ -65,7 +65,7 @@ uv run pytest -q && uv run ruff check app tests && uv run ruff format --check ap
 - 실적발표일 지표 미구현 (yfinance 과거 실적일 신뢰도 낮음)
 - 증권사 프리셋은 `generic`만 있음 — 토스증권 내보내기 형식은 공개 자료로 확인 못 함. 실제 파일을 받으면 `presets.py`에 추가 (그 전까지는 헤더 추측 + 컬럼 맞추기 화면으로 가져옴)
 - 대화형 상담은 가짜 LLM으로만 흐름 검증됨 (실제 API 키로 프롬프트 품질 미검증 — 2026-10-28 기준 `.env`의 키 값이 비어 있음)
-- 유사도 가중치·척도(`similarity.py` 상수)와 판정 임계값(`verdict.py`)은 직관값 — 데이터가 쌓이면 백테스트로 조정
+- 유사도 가중치·척도(`similarity.py` 상수)와 판정 임계값(`verdict.py`)은 직관값 — 데이터가 쌓이면 `scripts/tune.py`로 비교해 조정. 데모 데이터(승패 확정 22건)에서는 어느 후보든 Brier 0.27 안팎으로 동전 던지기와 구분 안 됨
 - 매도 판정 기준(판 뒤 20일 안 오르면 잘 판 것)과 매도 점검 임계값(5일 -15% 급락, 익절 +5% 미만)은 직관값. 데모 데이터 백테스트에서는 매도 추천/비추천이 거꾸로 나옴(표본 5·3건, 매도 이유 미태깅) — 실제 데이터로 `/backtest` 확인 필요
 - 보류 건은 '그날 종가에 샀다면'으로 계산 (실제로 살 수 있었던 가격과 다를 수 있음)
 - 직접 기록한 체결은 날짜가 CSV와 같아야 대체됨. 날짜를 틀리게 적으면 CSV 가져오기 때 같은 거래가 두 번 잡힐 수 있음 (상세 화면에서 수동 체결을 지우면 됨)

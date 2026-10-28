@@ -62,7 +62,9 @@ def context_similarity(a: Mapping[str, Any], b: Mapping[str, Any]) -> float | No
     return math.exp(-0.5 * sum(sq) / len(sq))
 
 
-def similarity(query: Case, other: Case) -> tuple[float, dict[str, float]] | None:
+def similarity(
+    query: Case, other: Case, weights: Mapping[str, float] = WEIGHTS
+) -> tuple[float, dict[str, float]] | None:
     parts: dict[str, float] = {}
     if (s := jaccard(query.tags, other.tags)) is not None:
         parts["tags"] = s
@@ -77,9 +79,11 @@ def similarity(query: Case, other: Case) -> tuple[float, dict[str, float]] | Non
     # 종목만 같은 건 근거가 못 된다: 이유나 상황 중 하나는 비교 가능해야 함
     if "tags" not in parts and "context" not in parts:
         return None
-    known = sum(WEIGHTS[k] for k in parts)
-    score = sum(WEIGHTS[k] * v for k, v in parts.items()) / known
-    coverage = known / sum(WEIGHTS.values())
+    known = sum(weights[k] for k in parts)
+    if known <= 0:
+        return None
+    score = sum(weights[k] * v for k, v in parts.items()) / known
+    coverage = known / sum(weights.values())
     return score * (0.5 + 0.5 * coverage), parts
 
 
@@ -88,13 +92,14 @@ def find_similar(
     history: Iterable[Case],
     k: int = TOP_K,
     min_similarity: float = MIN_SIMILARITY,
+    weights: Mapping[str, float] = WEIGHTS,
 ) -> list[Match]:
     """query 시점에 이미 청산돼 승패가 확정된 결정만 비교한다 (미래 정보 누출 방지)."""
     matches: list[Match] = []
     for other in history:
         if other.id == query.id or not other.resolved_before(query.decided_on):
             continue
-        result = similarity(query, other)
+        result = similarity(query, other, weights)
         if result is None or result[0] < min_similarity:
             continue
         matches.append(Match(other, round(result[0], 4), result[1]))

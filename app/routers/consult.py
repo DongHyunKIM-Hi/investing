@@ -1,4 +1,5 @@
 import re
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Annotated
 
@@ -16,6 +17,7 @@ from app.services.consult import (
     chat,
     held_tickers,
     judge,
+    open_consult,
     start_consult,
     visible_messages,
 )
@@ -93,6 +95,8 @@ def consult_start(
         raise HTTPException(400)
     if not TICKER.match(symbol):
         return consult_home(request, db, ticker, side, error="티커 형식이 아닙니다 (예: IONQ)")
+    if existing := open_consult(db, symbol, side, date.today()):
+        return RedirectResponse(f"/consult/{existing.id}", status_code=303)
     try:
         d = start_consult(db, symbol, PriceService(db), side)
     except ValueError as e:

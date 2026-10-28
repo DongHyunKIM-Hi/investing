@@ -138,3 +138,24 @@ def test_backtest_uses_only_prior_trades():
     assert rows[-1].verdict.label == "against"
     summary = summarize(rows)
     assert summary["against"].n == 1 and summary["insufficient"].n == 3
+
+
+def test_backtest_score_brier_and_spread():
+    from app.services.engine.backtest import score
+
+    history = [case(i, {"theme"}, SURGE, win=i % 3 == 0, days_ago=400 - i * 20) for i in range(12)]
+    rows = backtest(history)
+    sc = score(rows)
+    assert sc.total == 12 and 0 < sc.judged <= 12
+    assert sc.brier is not None and 0 <= sc.brier <= 1
+    assert sc.coverage == sc.judged / 12
+
+
+def test_find_similar_accepts_custom_weights():
+    q = case(1, {"theme"}, SURGE, ticker="AAA")
+    same_ticker = case(2, {"news"}, DIP, ticker="AAA", days_ago=300)
+    same_reason = case(3, {"theme"}, SURGE, ticker="BBB", days_ago=300)
+    ticker_only = {"tags": 0.0, "context": 0.0, "emotion": 0.0, "plan": 0.0, "ticker": 1.0}
+    top = find_similar(q, [same_ticker, same_reason], weights=ticker_only, min_similarity=0.0)
+    assert top[0].case.id == 2
+    assert find_similar(q, [same_ticker, same_reason])[0].case.id == 3

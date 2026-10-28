@@ -35,6 +35,21 @@ from app.taxonomy import EMOTIONS, reasons_for
 LOOKBACK = timedelta(days=400)
 
 
+def open_consult(db: Session, ticker: str, side: str, today: date) -> Decision | None:
+    """오늘 시작해 아직 판정 전인 같은 종목·방향 상담. 있으면 새로 만들지 않고 이어간다."""
+    return db.scalars(
+        select(Decision)
+        .where(
+            Decision.ticker == ticker,
+            Decision.side == side,
+            Decision.source == "consult",
+            Decision.decided_on == today,
+            Decision.verdict.is_(None),
+        )
+        .order_by(Decision.id.desc())
+    ).first()
+
+
 def start_consult(db: Session, ticker: str, prices: PriceService, side: str = "buy") -> Decision:
     """티커의 현재 상황을 스냅샷으로 찍고 '고민 중' 결정을 만든다."""
     today = date.today()
