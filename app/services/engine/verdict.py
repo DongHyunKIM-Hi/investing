@@ -15,6 +15,11 @@ PRIOR = 2.0
 MIN_SAMPLES = 3
 Z80 = 1.2816  # 80% 구간
 EARLY_EXIT = 0.05  # 판 뒤 20일간 이만큼 더 오르면 '너무 일찍 판' 것으로 본다
+# 판정 임계값. 보정 승률이 RECOMMEND_P 이상이고 보통(중앙값) 수익이면 추천,
+# AGAINST_P 이하이거나 보통 AGAINST_MEDIAN 넘게 손실이면 비추천. scripts/tune.py 로 재검토
+RECOMMEND_P = 0.6
+AGAINST_P = 0.4
+AGAINST_MEDIAN = -0.05
 
 VERDICTS: dict[str, str] = {
     "recommend": "추천",
@@ -101,9 +106,9 @@ def decide(matches: Sequence[Match]) -> Verdict:
 
     if len(matches) < MIN_SAMPLES:
         label = "insufficient"
-    elif p >= 0.6 and (typical or 0) > 0:
+    elif p >= RECOMMEND_P and (typical or 0) > 0:
         label = "recommend"
-    elif p <= 0.4 or (typical is not None and typical <= -0.05):
+    elif p <= AGAINST_P or (typical is not None and typical <= AGAINST_MEDIAN):
         label = "against"
     else:
         label = "caution"
